@@ -1,0 +1,11 @@
+nanan
+gitdog
+*.o
+*.a
+*.pdf
+*.dvi
+*.exe
+*.lib
+*.key
+.emacs.desktop
+
