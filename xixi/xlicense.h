@@ -42,7 +42,7 @@ typedef struct _XLICENSE {
 	int hash_id;                                  /* 使用什么HASH算法 */
 
 	/* 保存了公钥的证书(属主) */
-	PKF_V1 pfk;
+	PKF pfk;
 	
 	/* 以上部分是owner进行签名的部分 */
 

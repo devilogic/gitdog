@@ -9,6 +9,7 @@
 #define PKF_PROP_PUBLIC                                   0x01
 #define PKF_PROP_PRIVATE                                  0x02
 #define PKF_PROP_DECRYPT_PRIVATE                          0x04
+#define PKF_PROP_SIGN                                     0x08
 #define PKF_PROP_ROOT                                     0x1000      /* 无任何颁发者 */
 
 typedef uuid_t    XID, *PXID;
@@ -27,10 +28,15 @@ typedef struct _PKF_V1 {
 	unsigned int magic;
 	unsigned int version;
 	unsigned int file_size;                      /* 证书大小 */
-	unsigned char checksum[16];                  /* sha1 */
+
+	unsigned char checksum[20];                  /* sha1 */
 
 	/* 证书的属性 */
-	unsigned int property;
+	union {
+		unsigned int property;                       /* 此值位置不能变动 */
+		unsigned int checksum_start;
+		unsigned int sign_start;
+	};
 
 	/* 证书信息 */
 	XID pkf_id;                                   /* 证书的唯一ID */
@@ -40,15 +46,15 @@ typedef struct _PKF_V1 {
 	/* 加密私钥所需的密码HASH值 */
 	union {
 		char password[32];
-		unsigned char password_hash[16];
+		unsigned char password_hash[20];
 	};
 
 	/* 颁发者 */
 	PKF_ISSUER issuer;
 
 	/* 时间相关 */
-	unsigned int begin_time;                       /* 颁发的时间 */
-	unsigned int end_time;                         /* 失效的时间 */
+	unsigned long begin_time;                       /* 颁发的时间 */
+	unsigned long end_time;                         /* 失效的时间 */
 	
 	/* 与签名运算有关系的数据 */
 	struct {
@@ -84,22 +90,45 @@ typedef struct _PKF_PRIVATE_KEY_SECURITY {
 	int crypt_id;
 } PKF_PRIVATE_KEY_SECURITY, *PPKF_PRIVATE_KEY_SECURITY;
 
-PPKF pkfAlloc(int hash_id, int sign_id, int prng_id, 
-			  char* email, char* organ, 
+PPKF pkfAlloc(int hash_id, 
+			  int sign_id, 
+			  int prng_id, 
+			  char* email, 
+			  char* organ, 
 			  unsigned int end_time,
-			  char* password, int crypt_id);
+			  char* password, 
+			  int crypt_id);
+
 void pkfFree(PPKF pkf);
 
 void pkfShow(PPKF pkf);
-PPKF pkfMake(PPKF pkf, int make_key, 
+
+int pkfMakeKeyPair(char* public_key_path,
+				   char* private_key_path);
+
+PPKF pkfMake(PPKF pkf, 
+			 int make_key, 
 			 char* public_key_path, 
-			 char* private_key_path,
-			 char* nanan_path);
-PPKF pkfSign(char* pkf_file, char* opk_file, 
-			 char* nanan_path,
+			 char* private_key_path);
+
+PPKF pkfSign(char* pkf_file, 
+			 char* opk_file, 
 			 PPKF_ISSUER issuer);
 
-int pkfVerify(char* pkf_file, char* opp_file,
-			  char* nanan_path);
+int pkfVerify(char* pkf_file, 
+			  char* opp_file,
+			  int* result);
+
+void pkfSetNanan(char* nanan_path);
+
+int pkfReadPrivateKey(char* opk_file, 
+					  char* private_out_file,
+					  char* password);
+
+int pkfReadPublicKey(char* opk_file, 
+					 char* public_out_file);
+
+int pkfReadIssuer(char* opk_file, 
+				  PPKF_ISSUER issuer);
 
 #endif

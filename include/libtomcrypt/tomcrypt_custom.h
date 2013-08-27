@@ -256,7 +256,9 @@
 #define LTC_YARROW
 /* which descriptor of AES to use?  */
 /* 0 = rijndael_enc 1 = aes_enc, 2 = rijndael [full], 3 = aes [full] */
-#define LTC_YARROW_AES 0
+/* #define LTC_YARROW_AES 0 */
+/* 原先是使用0级别，这里采用3级 */
+#define LTC_YARROW_AES 3
 
 #if defined(LTC_YARROW) && !defined(LTC_CTR_MODE)
    #error LTC_YARROW requires LTC_CTR_MODE chaining mode to be defined!

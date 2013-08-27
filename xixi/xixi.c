@@ -9,6 +9,7 @@
 #include "pkf.h"
 #include "xlicense.h"
 #include "xcontent.h"
+#include "tools.h"
 
 #define NANAN_PATH                 "./nanan"
 typedef struct _ARGUMENTS {
@@ -17,12 +18,14 @@ typedef struct _ARGUMENTS {
 	int make_pkf;
 	int make_license;
 	int sign_pkf;
+	int verify_pkf;
+	int show_pkf;
 	int set_nanan;
-	int import_opk;
+	int import_root;
 
 	char nanan_path[128];
 	char pkf_path[128];
-	char owner_private_key_path[128];
+	char root_pkf_path[128];
 } ARGUMENTS, *PARGUMENTS;
 
 ARGUMENTS g_arguments = {
@@ -30,20 +33,25 @@ ARGUMENTS g_arguments = {
 	0,                /* make pkf */
 	0,                /* make license */
     0,                /* sign pkf */
+	0,                /* verify pkf */
+	0,                /* show pkf */
 	0,                /* set nanan path */
-    0,                /* import opk */
+    0,                /* import root */
 	{0},              /* nanan path */
 	{0},              /* pkf path */
-    {0}               /* owner private key path */
+    {0}               /* root pkf */
 };
 
 void usage() {
 	printf("xixi [options]\n");
-	printf("--make-pkf(-p) <pkf path>\n");
-	printf("--make-license(-l) <pkf path>\n");
-	printf("--sign-pkf(-s) <pkf path>\n");
-	printf("--set-nanan(-n) <nanan path>\n");
-	printf("--import-opk <opk path>\n");
+	printf("--make-pkf(-p) <pkf path> make pkf file\n");
+	printf("--make-license(-l) <pkf path>\n make xlincense");
+	printf("--sign-pkf(-s) <pkf path> sign pkf file\n");
+	printf("--verify-pkf(-v) <pkf path> verify pkf file\n");
+	printf("--show-pkf <pkf path> show pkf content\n");
+	printf("--set-nanan(-n) <nanan path> set nanan path\n");
+	printf("--import-root <opk path> import root pkf file\n");
+	printf("--version show version\n");
 	printf("\n");
 	printf("http://www.4dogs.cn\n");
 	printf("%s\n\n", XIXI_VERSION);
@@ -51,15 +59,17 @@ void usage() {
 
 int handle_arguments(int argc, char* argv[]) {
 	int opt,show_version, longidx;
-	int import_opk;
-	const char* short_opts = ":p:l:s:";
+	int import_root,show_pkf;
+	const char* short_opts = ":p:l:s:v:n:";
 	struct option long_opts[] = {
 		/*0*/{"make-pkf",1,NULL,'p'},
 		/*1*/{"make-license",1,NULL,'l'},
 		/*2*/{"sign-pkf",1,NULL,'s'},
-		/*3*/{"version",0,&show_version,0x2013},
-		/*4*/{"set-nanan",1,NULL,'n'},
-		/*5*/{"import-opk",1,&import_opk,0x2012},
+		/*3*/{"verify-pkf",1,NULL,'v'},
+		/*4*/{"show-pkf",1,&show_pkf,0x2011},
+		/*5*/{"version",0,&show_version,0x2013},
+		/*6*/{"set-nanan",1,NULL,'n'},
+		/*7*/{"import-root",1,&import_root,0x2012},
 		{0,0,0,0}
 	};
 
@@ -67,16 +77,24 @@ int handle_arguments(int argc, char* argv[]) {
 							  long_opts, &longidx)) != -1) {
 		switch (opt) {
 		case 0:
-			if ((show_version == 0x2013) && (longidx == 3)) {
+			if ((show_version == 0x2013) && (longidx == 5)) {
 				g_arguments.show_version = 1;
-			} else if ((import_opt == 0x2012) && (longidx == 5)) {
-				g_arguments.import_opk = 1;
-				strcpy(g_arguments.owner_private_key_path,
+			} else if ((import_root == 0x2012) && (longidx == 7)) {
+				g_arguments.import_root = 1;
+				strcpy(g_arguments.root_pkf_path,
+					   optarg);
+			} else if ((show_pkf == 0x2011) && (longidx == 4)) {
+				g_arguments.show_pkf = 1;
+				strcpy(g_arguments.pkf_path,
 					   optarg);
 			}
 			break;
 		case 's':
 			g_arguments.sign_pkf = 1;
+			strcpy(g_arguments.pkf_path, optarg);
+			break;
+		case 'v':
+			g_arguments.verify_pkf = 1;
 			strcpy(g_arguments.pkf_path, optarg);
 			break;
 		case 'p':
@@ -86,9 +104,6 @@ int handle_arguments(int argc, char* argv[]) {
 		case 'l':
 			g_arguments.make_license = 1;
 			strcpy(g_arguments.pkf_path, optarg);
-			break;
-		case 's':
-			
 			break;
 		case 'n':
 			g_arguments.set_nanan = 1;
@@ -125,26 +140,41 @@ static PPKF read_pkf_configure_from_stdin(int* make_key,
 	s = gets(email);
 	printf("organization:");
 	s = gets(organ);
-	printf("hash:");
+	printf("hash algorithm:");
 	s = gets(buffer);
 	hash_id = atoi(buffer);
-	printf("sign:");
+	printf("sign algorithm:");
 	s = gets(buffer);
 	sign_id = atoi(buffer);
-	printf("prng:");
+	printf("prng algorithm:");
 	s = gets(buffer);
 	prng_id = atoi(buffer);
-	printf("end time(year):");
-	s = gets(buffer);
-	end_data = atoi(buffer);
-	printf("make key:");
+
+	{	
+		/* 到期日期 */
+		struct tm now = {0};
+
+		printf("end time--\n");
+		printf("\tyear:");
+		s = gets(buffer);
+		now.tm_year = atoi(s) - 1900;
+		printf("\tmoon:");
+		s = gets(buffer);
+		now.tm_mon = atoi(s);
+		printf("\tday:");
+		s = gets(buffer);
+		now.tm_mday = atoi(s);
+		end_data = mktime(&now);
+	}
+
+	printf("make key?:");
 	s = gets(buffer);
 	if (strlen(buffer)) *make_key = 1;
 	else *make_key = 0;
 	//printf("crypt private key:");
 	//s = gets(buffer);
 	//if (strlen(buffer)) {
-	printf("crypt private key:");
+	printf("crypt private key algorithm:");
 	s = gets(buffer);
 	crypt_id = atoi(buffer);
 	printf("password(max 32 character):");
@@ -194,7 +224,39 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 
-	if (g_arguments.make_pkf) {
+	if (strlen(g_arguments.nanan_path) == 0) {
+		strcpy(g_arguments.nanan_path, NANAN_PATH);
+	} else {
+		pkfSetNanan(g_arguments.nanan_path);
+	}
+
+	/* 处理命令行 */
+	if (g_arguments.show_version) {
+		printf("%s\n", XIXI_VERSION);
+	} else if (g_arguments.show_pkf) {
+		FILE* fp;
+		unsigned char* tmp;
+		unsigned long tmpsize;
+		fp = fopen(g_arguments.pkf_path, "rb");
+		if (!fp) {
+			printf("[-] open pkf file:%s error\n", g_arguments.pkf_path);
+			return 1;
+		}
+		
+		err = read_file(g_arguments.pkf_path,
+						&tmp,
+						&tmpsize);
+		if (err != 0) {
+			fclose(fp);
+			printf("[-] read pkf file%s error\n", g_arguments.pkf_path);
+			return 1;
+		}
+		fclose(fp);
+
+		pkf = (PPKF)tmp;
+		pkfShow(pkf);
+		free(tmp);
+	} else if (g_arguments.make_pkf) {
 		char private_key_path[256];
 		char public_key_path[256];
 
@@ -207,14 +269,10 @@ int main(int argc, char* argv[]) {
 			return 1;
 		}
 
-		if (strlen(g_arguments.nanan_path) == 0)
-			strcpy(g_arguments.nanan_path, NANAN_PATH);
-
 		pkf = pkfMake(pkf, 
 					  make_key, 
 					  public_key_path,
-					  private_key_path,
-					  g_arguments.nanan_path);
+					  private_key_path);
 
 		if (!pkf) {
 			printf("[-] pkf make error\n");
@@ -232,8 +290,10 @@ int main(int argc, char* argv[]) {
 				goto _error;
 			}
 			total = pkf->file_size;
-			if ((err = fwrite((unsigned char*)pkf
-							  , 1, total, fp)) != total) {
+			if ((err = fwrite((unsigned char*)pkf,
+							  1, 
+							  total, 
+							  fp)) != total) {
 				printf("[-] write pkf error\n");
 				goto _error;
 			}
@@ -245,23 +305,98 @@ int main(int argc, char* argv[]) {
 		}
 
 	} else if (g_arguments.make_license) {
-	} else if (g_arguments.sign_pkf) {
+	} else if (g_arguments.verify_pkf) {
 		PPKF pkf;
 		FILE* fp;
+		int err, result;
+		char public_out_file[256];
+
+		if (!g_arguments.import_root) {
+			printf("[-] not import root pkf\n");
+			return 1;
+		}
+
+		err = pkfReadPublicKey(g_arguments.root_pkf_path,
+							   public_out_file);
+
+		if (err != 0) {
+			printf("[-] read public key error\n");
+			return 1;
+		}
+
+		err = pkfVerify(g_arguments.pkf_path, 
+						public_out_file,
+						&result);
+		if (err != 0) {
+			if (err == 2) {
+				printf("[-] pkf:%s is not has sign\n",
+					   g_arguments.pkf_path);
+			} else {
+				printf("[-] verify error\n");
+			}
+		}
+		delete_file(public_out_file);
+
+		if (result) {
+			printf("[+] verify success\n");
+		} else {
+			printf("[-] verify failed\n");
+		}
+		
+	} else if (g_arguments.sign_pkf) {
+		PPKF pkf;
+#if 0
+		FILE* fp;
+#endif
 		int err;
-		if (!g_arguments.import_opk) {
-			printf("[-] not import private key\n");
+		PKF_ISSUER issuer;
+		char private_out_file[256];
+		char password[128];
+		char* s;
+		
+		memset(&issuer, 0, sizeof(PKF_ISSUER));
+
+		if (!g_arguments.import_root) {
+			printf("[-] not import root pkf\n");
+			return 1;
+		}
+
+		err = pkfReadIssuer(g_arguments.root_pkf_path,
+							&issuer);
+		if (err != 0) {
+			printf("[-] read issuer info error\n");
+			return 1;
+		}
+
+		/* 读取密码 */
+	_reinput:
+		memset(password, 0, 128);
+		printf("please input private key password:");
+		gets(password);
+		if (strlen(password) == 0) goto _reinput;
+
+		err = pkfReadPrivateKey(g_arguments.root_pkf_path,
+								private_out_file,
+								password);
+		if (err != 0) {
+			printf("[-] read private key error\n");
 			return 1;
 		}
 
 		pkf = pkfSign(g_arguments.pkf_path, 
-					  g_arguments.owner_private_key_path);
+					  private_out_file,
+					  &issuer);
+
+		delete_file(private_out_file);
+
 		if (!pkf) {
 			printf("[-] sign pkf error\n");
 			return 1;
 		}
-		
-		fp = fopen(g_arguments.okf_path, "wb");
+
+#if 0
+		/* 我写这段的时候，肯定也是在犯鼻炎 */
+		fp = fopen(g_arguments.pkf_path, "wb");
 		if (!fp) {
 			printf("[-] open pkf file:%s failed\n", g_arguments.pkf_path);
 			pkfFree(pkf);
@@ -274,14 +409,12 @@ int main(int argc, char* argv[]) {
 			pkfFree(pkf);
 			return 1;			
 		}
+		fclose(fp);
+#endif
 
 		pkfShow(pkf);
-
-		fclose(fp);
 		pkfFree(pkf);
 	}
-
-	
 
 	return 0;
 

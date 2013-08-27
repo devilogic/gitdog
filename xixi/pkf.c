@@ -7,8 +7,11 @@
 #include <strings.h>
 #include <uuid/uuid.h>
 
+static char* g_nanan_path = NULL;
+
 static char* g_hash_algorithm[] = {
 	"sha256",
+	"tiger",
 	"sha1",
 	"md5",
 	"sha384",
@@ -32,8 +35,9 @@ static char* g_sign_algorithm[] = {
 static char* g_prng_algorithm[] = {
 	"yarrow",
 	"sprng",
-	"rc4",
-	"fortuna"
+	"sober128",
+	"fortuna",
+	"rc4"
 };
 
 static char* g_crypt_algorithm[] = {
@@ -42,7 +46,7 @@ static char* g_crypt_algorithm[] = {
 	"rc5",
 	"rc6",
 	"safer+",
-	"none"
+	"NULL",
 	"aes",
 	"twofish",
 	"safer-k64",
@@ -50,153 +54,21 @@ static char* g_crypt_algorithm[] = {
 	"safer-k128",
 	"safer-sk128",
 	"rc2",
-	"des"
+	"des",
+	"3des",
+	"cast5",
+	"noekeon",
+	"skipjack",
+	"khazad",
+	"anubis"
 };
 
-static void show_xid(XID xid) {
-	int i;
-	for (i = 0; i < 16; i++)
-		printf("%02x", xid[i]);
-	printf("\n");
-	return;
-}
-
-static char* show_hash(int hash_id) {
-	return g_hash_algorithm[hash_id];
-}
-
-static char* show_sign(int sign_id) {
-	return g_sign_algorithm[sign_id];
-}
-
-static char* show_prng(int prng_id) {
-	return g_prng_algorithm[prng_id];
-}
-
-static char* show_crypt(int crypt_id) {
-	return g_crypt_algorithm[crypt_id];
-}
-
-static void show_key(unsigned char* key, unsigned int size) {
-	unsigned int i;
-	for(i = 0; i < size; i++) {
-		printf("%02x", key[i]);
-	}
-	printf("\n");
-}
-
-static unsigned char* get_crypt_private_key_struct(PPKF pkf) {
-	unsigned char* p;
-	p = (unsigned char*)pkf;
-
-	if (pkf->property & PKF_PROP_DECRYPT_PRIVATE)
-		p += sizeof(PKF);
-	else return NULL;
-
-	return p;
-}
-
-static unsigned char* get_private_key(PPKF pkf) {
-	unsigned char* p;
-	if (pkf->property & PKF_PROP_DECRYPT_PRIVATE) {
-		p = get_crypt_private_key_struct(pkf);
-		p += sizeof(PKF_PRIVATE_KEY_SECURITY);
-	} else {
-		p = (unsigned char*)pkf;
-		p += sizeof(PKF_PRIVATE_KEY_SECURITY);
-	}
-
-	return p;
-}
-
-static unsigned char* get_public_key(PPKF pkf) {
-	unsigned char*p;
-	p = get_private_key(pkf);
-	p += pkf->private_key_size;
-	return p;
-}
-
-static void show_issuer(PPKF pkf) {
-	PPKF_ISSUER issuer;
-	unsigned char* key;
-
-	issuer = &(pkf->issuer);
-	printf("ISSUER XID = "); 
-	show_xid(issuer->pkf_id);
-	printf("ISSUER NAME = %s\n", issuer->name);
-	printf("SIGN SIZE = %d\n", issuer->sign_size);
-	
-	key = ((char*)pkf) + sizeof(PKF) + 
-		pkf->public_key_size + pkf->private_key_size;
-	show_key(key, issuer->sign_size);
-}
-
-static int show_property(PPKF pkf) {
-	unsigned int property;
-	unsigned char* key;
-	PPKF_PRIVATE_KEY_SECURITY security;
-
-	property = pkf->property;
-
-	if (property & PKF_PROP_PUBLIC) {
-		printf("PUBLIC KEY SIZE = %d\n", pkf->public_key_size);
-		key = get_public_key(pkf);
-		show_key(key, pkf->public_key_size);
-	}
-
-	if (property & PKF_PROP_PRIVATE) {
-		printf("PRIVATE KEY SIZE = %d\n", pkf->private_key_size);
-		key = get_private_key(pkf);
-		show_key(key, pkf->private_key_size);
-	}
-
-	if (property & PKF_PROP_DECRYPT_PRIVATE) {
-		int i;
-		security = (PPKF_PRIVATE_KEY_SECURITY)get_crypt_private_key_struct(pkf);
-		printf("CRYPT PRIVATE KEY ALGORITHM = %s\n", 
-			   show_crypt(security->crypt_id));
-		printf("CRYPT PRIVATE KEY PASSWORD SHA1 = ");
-		for (i = 0; i < 16; i++)
-			printf("%02x", pkf->password_hash[i]);
-		printf("\n");
-	}
-
-	if (property & PKF_PROP_ROOT) {
-		printf("PKF TYPE = ROOT\n");
-		return 1;
-	} else {
-		show_issuer(pkf);
-	}
-	
-	return 0;
-}
+#include "tools.h"
+#include "pkf_tools.h"
+#include "pkf_show.h"
 
 void pkfShow(PPKF pkf) {
-	int root;
-	char buffer[64];
-	printf("PKF ID = ");
-	show_xid(pkf->pkf_id);
-	printf("EMAIL = %s\n", pkf->email);
-	printf("ORGANIZATION = %s\n", pkf->organization);
-
-	printf("BEGIN TIME = %s\n", ctime(&(pkf->begin_time)));
-	printf("END TIME = %s\n", ctime(&(pkf->end_time)));
-
-	printf("HASH ALGORITHM = %s\n", show_hash(pkf->sign_support.hash_id));
-	printf("SIGN ALGORITHM = %s\n", show_sign(pkf->sign_support.sign_id));
-	printf("PRNG ALGORITHM = %s\n", show_prng(pkf->sign_support.prng_id));
- 
-	show_property(pkf);
-}
-
-static int get_file_size(FILE* fp) {
-	int total;
-	
-	fseek(fp, 0, SEEK_END);
-	total = ftell(fp);
-	fseek(fp, 0, SEEK_SET);
-
-	return total;
+	show_pkf(pkf);
 }
 
 #define _fill_pkf_header(h)						\
@@ -205,10 +77,14 @@ static int get_file_size(FILE* fp) {
 		  uuid_generate((h)->pkf_id);
 
 #define DEF_PKF_PASSWORD            "aSBsb3ZlIHlvdSB4aWFvcWlhbiBmb3IgZXZlcgo="
-PPKF pkfAlloc(int hash_id, int sign_id, int prng_id,
-			  char* email, char* organ,
+PPKF pkfAlloc(int hash_id, 
+			  int sign_id, 
+			  int prng_id,
+			  char* email, 
+			  char* organ,
 			  unsigned int end_time,
-			  char* password, int crypt_id) {
+			  char* password, 
+			  int crypt_id) {
 	PPKF pkf;
 	time_t the_time;
 
@@ -224,7 +100,7 @@ PPKF pkfAlloc(int hash_id, int sign_id, int prng_id,
 	strcpy(pkf->email, email);
 	strcpy(pkf->organization, organ);
 
-	pkf->begin_time = time((time_t*)&(pkf->begin_time));
+	time((time_t*)&(pkf->begin_time));
 	pkf->end_time = end_time;
 
 	/* 查看是否密码为空 */
@@ -239,37 +115,92 @@ PPKF pkfAlloc(int hash_id, int sign_id, int prng_id,
 }
 
 void pkfFree(PPKF_V1 pkf) {
-	free(pkf);
+	if (pkf)
+		free(pkf);
 }
 
-static int checksum_file(PPKF pkf) {
+int pkfMakeKeyPair(char* public_key_path,
+				   char* private_key_path) {
 	int err;
+	char buffer[128] = {0};
 
-	err = 0;
+#if 0
+	unsigned char* private_key;
+	unsigned long private_key_size;
+	unsigned char* public_key;
+	unsigned long public_key_size;
 
-	return err;
+	private_key = NULL;
+	private_key_size = 0;
+	public_key = NULL;
+	public_key_size = 0;
+#endif
+
+	//err = execl(g_nanan_path, "nanan", "-m", ".", NULL);
+	sprintf(buffer, "%s --silent -m .", g_nanan_path);
+	system(buffer);
+
+#if 0
+	if (private_key_path) {
+
+		err = read_file("./private.key", 
+						&private_key,
+						&private_key_size);
+		if (err != 0)
+			goto _error;
+
+		err = write_file(private_key_path, 
+						 private_key, 
+						 private_key_size);
+		if (err != 0)
+			goto _error;
+	}
+
+	if (public_key_path) {
+		err = read_file("./public.key", 
+						&public_key,
+						&public_key_size);
+		if (err != 0)
+			goto _error;
+
+		err = write_file(public_key_path, 
+						 public_key, 
+						 public_key_size);
+		if (err != 0)
+			goto _error;
+	}
+#endif
+
+ _error:
+	//delete_file("./private.key");
+	//delete_file("./public.key");
+#if 0
+	if (private_key) free(private_key);
+	if (public_key) free(public_key);
+#endif
+	return 0;
 }
 
+#define freev(v)  free(v);v=NULL;
 /**
  * @brief 生成PKF证书
  * @param pkf 指向一个pkf证书指针
  * @param make_key 是否生成公私钥对
  * @param public_key_path 公钥路径
  * @param private_key_path 私钥路径
- * @paran nanan_path 我的爱狗
+ * @paran g_nanan_path 我的爱狗
  */
-#define TMP_PASSWORD_HASH_FILE      "./.password.hash.tmp"
-#define TMP_PRIVATE_KEY_FILE        "./.private.key.tmp"
-PPKF pkfMake(PPKF pkf, int make_key, 
+PPKF pkfMake(PPKF pkf, 
+			 int make_key, 
 			 char* public_key_path,
-			 char* private_key_path,
-			 char* nanan_path) {
+			 char* private_key_path) {
 	int err, t, size;
 	char buffer[256];
 	unsigned char* tmp;
-	FILE* fp;
 	char password[512];
 	int crypt_id;
+	unsigned char* value;
+	unsigned long value_size;
 
 	t = 0;    /* 底下要用 */
 	memset(buffer, 0, 256);
@@ -281,9 +212,10 @@ PPKF pkfMake(PPKF pkf, int make_key,
 		/*
 		 * 生成公私钥对
 		 */
-		//err = execl(nanan_path, "nanan", "-m", ".", NULL);
-		sprintf(buffer, "%s --silent -m .", nanan_path);
-		err = system(buffer);
+		err = pkfMakeKeyPair(public_key_path,
+							 private_key_path);
+		if (err != 0)
+			goto _error;
 	}
 
 	tmp = (unsigned char*)malloc(10240);
@@ -307,57 +239,46 @@ PPKF pkfMake(PPKF pkf, int make_key,
 			/*
 			 * 使用密码进行加密并输出到当前目录
 			 */
-			sprintf(buffer, 
-					"%s --silent -1 %d -3 2 -4 0 -5 3 -e %s -o %s %s", 
-					nanan_path,
-					security.crypt_id,
-					password,
-					TMP_PRIVATE_KEY_FILE,
-					private_key_path);
-			system(buffer);
+			err = crypt_file(g_nanan_path,
+							 private_key_path,
+							 security.crypt_id,
+							 2,
+							 1,
+							 password,
+							 &value,
+							 &value_size);
 
-			fp = fopen(TMP_PRIVATE_KEY_FILE, "rb");
-			if (!fp)
+			if (err != 0) {
 				goto _error;
-			
-			size = get_file_size(fp);
-			err = fread(private_key, 1, size, fp);
-			if (err != size)
-				goto _error;
+			}
 
-			/* 必须设置回NULL，打开PUBLIC KEY时要验证 */
-			fclose(fp);fp = NULL;
-			pkf->private_key_size = size;
-			t += size;
-			
-			/* 删除临时文件 */
-			sprintf(buffer, "rm -f %s", TMP_PRIVATE_KEY_FILE);
-			system(buffer);
+			memcpy(private_key, value, value_size);
+			pkf->private_key_size = value_size;
+			t += value_size;
+			freev(value);
 
 			/* 计算密码的SHA1值 */
-			memset(buffer, 0, sizeof(buffer));
-			sprintf(buffer, "echo %s | %s --silent -3 2 -h -o %s",
-					password,
-					nanan_path,
-					TMP_PASSWORD_HASH_FILE);
-			system(buffer);
-
-			/* 读取HASH值 */
-			{
-				fp = fopen(TMP_PASSWORD_HASH_FILE, "rb");
-				if (!fp) {
-					goto _error;
-				}
-				err = fread(pkf->password_hash, 1, 16, fp);
-				if (err != 16) {
-					goto _error;
-				}
-				fclose(fp);
-				/* 删除临时文件 */
-				sprintf(buffer, "rm -f %s", TMP_PASSWORD_HASH_FILE);
-				system(buffer);				  
+			err = hash_string(g_nanan_path, 
+							  password, 
+							  2, 
+							  &value, 
+							  &value_size);
+			if (err != 0) {
+				goto _error;
 			}
-		}
+			memcpy(pkf->password_hash, value, value_size);
+			freev(value);
+		} else {
+			err = read_file(private_key_path, &value, &value_size);
+			if (err != 0)
+				goto _error;
+
+			private_key = tmp;
+			memcpy(private_key, value, value_size);
+			pkf->private_key_size = value_size;
+			t += value_size;
+			freev(value);
+		}/* end else */
 	}
 
 	/* 公钥不为空 */
@@ -367,19 +288,19 @@ PPKF pkfMake(PPKF pkf, int make_key,
 		pkf->property |= PKF_PROP_PUBLIC;
 
 		public_key = tmp + t;
-		fp = fopen(public_key_path, "rb");
-		if (!fp)
-			goto _error;
-			
-		size = get_file_size(fp);
-		pkf->public_key_size = size;
-		err = fread(public_key, 1, size, fp);
-		if (err != size)
+		
+		err = read_file(public_key_path, &value, &value_size);
+		if (err != 0)
 			goto _error;
 
-		t += size;
-		fclose(fp);
+		memcpy(public_key, value, value_size);
+		pkf->public_key_size = value_size;
+		t += value_size;
+		freev(value);
 	}
+
+	/* 由于是新建证书,没有办法者，所以这里算作是根证书 */
+	pkf->property |= PKF_PROP_ROOT;
 
 	/* 计算PKF证书总长度 */
 	pkf->file_size = sizeof(PKF) + t;
@@ -401,7 +322,8 @@ PPKF pkfMake(PPKF pkf, int make_key,
 		free(tmp);
 
 		pkf = (PPKF)tmp2;
-
+		
+		/* 计算校验和 */
 		if (checksum_file(pkf) != 0) {
 			goto _error;
 		}
@@ -411,117 +333,378 @@ PPKF pkfMake(PPKF pkf, int make_key,
  _error:
 	if (tmp) free(tmp);
 	if (pkf) free(pkf);
-	if (fp) fclose(fp);
 	return NULL;
 }
 
-#define TMP_SIGN_DATA_FILE     "./.sign_data.tmp"
-#define TMP_SIGN_DATA_RESULT_FILE "./.sign_data_result.tmp"
-#define TMP_OWNER_PRIVATE_FILE  "./.owner_private_key.tmp"
-PPKF pkfSign(char* pkf_file, char* opk_file, 
-			 char* nanan_path,
+PPKF pkfSign(char* pkf_file, 
+			 char* opk_file, 
 			 PPKF_ISSUER issuer) {
 	PPKF pkf;
 	char buffer[512];
-	unsigned char* tmp;
+	unsigned char* value;
+	unsigned long value_size;
 	unsigned char* sign_data;
-	FILE* fp;
-	int err, size, sign_size;
+	int err, sign_size;
+	unsigned char* tmp;
 
 	pkf = NULL;
 	tmp = NULL;
-	fp = NULL;
 
-	tmp = (unsigned char*)malloc(10240);
+	err = read_file(pkf_file, &value, &value_size);
+	if (err != 0) {
+		goto _error;
+	}
+
+	tmp = (unsigned char*)malloc(value_size+4096);/* 多分配4KB */
 	if (!tmp) {
 		goto _error;
 	}
-
-	fp = fopen(pkf_file, "rb");
-	if (!fp) {
-		goto _error;
-	}
-
-	size = get_file_size(fp);
-	err = fread(tmp, 1, size, fp);
-	if (err != size) {
-		goto _error;
-	}
-	fclose(fp);
-
-	pkf = (PKF)tmp;
+	memcpy(tmp, value, value_size);
+	pkf = (PPKF)tmp;
 
 	/* 签名需要公钥存在 */
 	if (pkf->property & PKF_PROP_PUBLIC == 0) {
 		goto _error;
 	}
 	
-	sign_data = (unsigned char*)&(pkf->file_size);
-	sign_size = pkf->file_size - (unsigned int)(sign_data - tmp);
+	/* 需要签名的内容就是在checksum以下的内容 */
+	sign_data = (unsigned char*)&(pkf->sign_start);
+	sign_size = pkf->file_size - (int)(sign_data - tmp);
 	
 	if (sign_size <= 0) {
 		goto _error;
 	}
 
-	fp = fopen(TMP_SIGN_DATA_FILE, "wb");
-	if (!fp) {
-		goto _error;
-	}
+	/* 计算公钥签名 */
+	{
+		char tmpfile[256];
+		unsigned char* tmp_sign;
+		unsigned long tmp_sign_size;
 
-	err = fwrite(sign_data, 1, sign_size, fp);
-	if (err != sign_size) {
-		goto _error;
-	}
-	fclose(fp);
+		srand(0);
+		sprintf(tmpfile, ".sign_pkf_%d", rand());
+		err = write_file(tmpfile, sign_data, sign_size);
+		if (err != 0) {
+			goto _error;
+		}
 
-	sprintf(buffer,
-			"%s -2 %d -3 %d -4 %d -s --import-private-key %s -o %s %s",
-			nanan_path,
-			pkf->sign_support.sign_id,
-			pkf->sign_support.sign_id,
-			pkf->sign_support.sign_id,
-			opk_file,
-			TMP_SIGN_DATA_RESULT_FILE,
-			TMP_SIGN_DATA_FILE);
-	system(buffer);
+		err = sign_file(g_nanan_path,
+						tmpfile,
+						pkf->sign_support.sign_id,
+						pkf->sign_support.hash_id,
+						pkf->sign_support.prng_id,
+						opk_file,
+						&tmp_sign,
+						&tmp_sign_size);
+		if (err != 0) {
+			goto _error;
+		}
+
+		sign_data = tmp + pkf->file_size;
+		memcpy(sign_data, tmp_sign, tmp_sign_size);
+		free(tmp_sign);
+		delete_file(tmpfile);
 	
-	/* 删除临时文件 */
-	sprintf(buffer, "rm -f %s", TMP_SIGN_DATA_FILE);
-	system(buffer);
+		/* 设置颁发者签名信息 */
+		issuer->sign_size = tmp_sign_size;
+		memcpy((unsigned char*)&(pkf->issuer),
+			   issuer,
+			   sizeof(PKF_ISSUER));
 
-	fp = fopen(TMP_SIGN_DATA_RESULT_FILE, "rb");
-	if (!fp) {
-		goto _error;
+		/* 这里取消掉根证书的属性 */
+		pkf->property &= ~PKF_PROP_ROOT;
+
+		/* 写入签名属性 */
+		pkf->property |= PKF_PROP_SIGN;
+
+		/* 重新计算PKF文件长度 */
+		pkf->file_size += tmp_sign_size;
 	}
-
-	size = get_file_size(fp);
-	sign_data = tmp + pkf->file_size;
-	err = fread(sign_data, 1, size, fp);
-	if (err != size) {
-		goto _error;
-	}
-	fclose(fp);
-
-	sprintf(buffer, "rm -f %s", TMP_SIGN_DATA_RESULT_FILE);
-	system(buffer);
-	
-	/* 设置颁发者签名信息 */
-	issuer->sign_size = size;
-	memcpy((unsigned char*)&(pkf->issuer),
-		   issuer,
-		   sizeof(PKF_ISSUER));
-
-	
 
 	/* 重新计算校验和 */
 	if ((err = checksum_file(pkf))!= 0) {
 		goto _error;
 	}
 
+	{
+		/* 重新写入到文件中 */
+		char new_file[256];
+
+		sprintf(new_file, 
+				"%s.sign",
+				pkf_file);
+		err = write_file(new_file, 
+						 (unsigned char*)pkf,
+						 pkf->file_size);
+		if (err != 0)
+			goto _error;
+	}
+	if (value) free(value);
 	return pkf;
  _error:
 	if (tmp) free(tmp);
-	if (fp) fclose(fp);
+	if (value) free(value);
 	return NULL;
 }
 
+int pkfVerify(char* pkf_file, 
+			  char* opp_file,
+			  int* result) {
+	int err;
+	PPKF pkf;
+	unsigned char* tmp;
+	unsigned long pkf_size;
+	unsigned char* sign_data;
+	unsigned long sign_data_size;
+	unsigned char* sign;
+	unsigned long sign_size;
+	char tmpfile[256];
+	char tmpfile2[256];
+
+	tmp = NULL;
+	pkf_size = 0;
+
+	err = read_file(pkf_file, &tmp, &pkf_size);
+	if (err != 0) {
+		goto _error;
+	}
+	
+	pkf = (PPKF)tmp;
+
+	/* 首先检查证书是否过期 */
+#if 0
+	{
+		time_t now;
+		time(&now);
+		if (difftime(pkf->end_time, 
+					 now) > 0) {
+			*result = 0;
+			free(tmp);
+			return 0;
+		}/* end if */
+	}
+#endif
+
+	/* 需要签名的内容就是在checksum以下的内容 */
+	sign_data = (unsigned char*)&(pkf->sign_start);
+	sign_data_size = pkf->file_size - (int)(sign_data - tmp);
+	
+	if (sign_data_size <= 0) {
+		goto _error;
+	}
+
+	srand(0);
+	sprintf(tmpfile, ".verify_%d", rand());
+
+	err = write_file(tmpfile, sign_data, sign_data_size);
+	if (err != 0) {
+		goto _error;
+	}
+
+	/* 读取签名 */
+	sign = get_sign(pkf);
+	if (!sign) {
+		err = 2;
+		goto _error;
+	}
+	sign_size = pkf->file_size - (sign - tmp);
+
+	sprintf(tmpfile2, ".sign_data_%d", rand());
+	
+	err = write_file(tmpfile2, sign, sign_size);
+	if (err != 0)
+		goto _error;
+
+	err = verify_file(g_nanan_path,
+					  tmpfile,
+					  pkf->sign_support.sign_id,
+					  pkf->sign_support.hash_id,
+					  pkf->sign_support.prng_id,
+					  opp_file,
+					  tmpfile2,
+					  (unsigned char*)result);
+	if (err != 0)
+		goto _error;
+
+	err = 0;
+   
+ _error:
+	if (tmp) free(tmp);
+	delete_file(tmpfile);
+	delete_file(tmpfile2);
+	return err;
+}
+
+void pkfSetNanan(char* nanan_path) {
+	g_nanan_path = nanan_path;
+}
+
+int pkfReadPrivateKey(char* opk_file, 
+					  char* private_out_file,
+					  char* password) {
+	int err;
+	unsigned char* value;
+	unsigned long value_size;
+	PPKF pkf;
+	unsigned char* _private_key;
+	unsigned long _private_key_size;
+	unsigned char* hash;
+	unsigned long hash_size;
+	char tmpfile[256];
+	unsigned char* private_key;
+	unsigned long private_key_size;
+	unsigned char* x;
+	unsigned long y;
+
+	value = NULL;
+	value_size = 0;
+	
+	err = read_file(opk_file, &value, &value_size);
+	if (err != 0) { 
+		goto _error;
+	}
+
+	pkf = (PPKF)value;
+
+	/* 判断当前PKF是否存在私钥 */
+	if (pkf->property & PKF_PROP_PRIVATE == 0) {
+		goto _error;
+	}
+	
+	_private_key = get_private_key(pkf);
+	if (_private_key == NULL)
+		goto _error;
+	_private_key_size = pkf->private_key_size;
+
+	/* 如果私钥没有加密则直接跳过加密过程 */
+	if (pkf->property & PKF_PROP_DECRYPT_PRIVATE == 0) {
+		x = _private_key;
+		y = _private_key_size;
+		goto _write_private_key;
+	}
+
+	/* 开始解密 */
+	err = hash_string(g_nanan_path,
+					  password,
+					  2,
+					  &hash,
+					  &hash_size);
+	if (err != 0) {
+		goto _error;
+	}
+
+	if (memcmp(hash, pkf->password_hash, hash_size) != 0) {
+		goto _error;
+	}
+
+	srand(0);
+	sprintf(tmpfile, ".decrypt_private_key_%d", rand());
+	err = write_file(tmpfile, _private_key, _private_key_size);
+	if (err != 0) {
+		goto _error;
+	}
+
+	err = crypt_file(g_nanan_path,
+					 tmpfile,
+					 6,
+					 2,
+					 0,
+					 password,
+					 &private_key,
+					 &private_key_size);
+	if (err != 0)
+		goto _error;
+
+	x = private_key;
+	y = private_key_size;
+
+ _write_private_key:
+	sprintf(private_out_file, 
+			".tmp_prikey_%d", 
+			rand());
+	err = write_file(private_out_file, 
+					 x, 
+					 y);
+   
+
+	if (err != 0)
+		goto _error;
+
+ _error:
+	if (value) free(value);
+	delete_file(tmpfile);
+	return err;
+
+}
+
+int pkfReadPublicKey(char* opk_file, 
+					 char* public_out_file) {
+	int err;
+	unsigned char* value;
+	unsigned long value_size;
+	unsigned char* public_key;
+	unsigned long public_key_size;
+	PPKF pkf;
+
+	err = 0;
+	value = NULL;
+	value_size = 0;
+	pkf = NULL;
+
+	err = read_file(opk_file, &value, &value_size);
+	if (err != 0) {
+		goto _error;
+	}
+
+	pkf = (PPKF)value;
+
+	if (pkf->property & PKF_PROP_PUBLIC == 0) {
+		err = 1;
+		goto _error;
+	}
+
+	public_key = get_public_key(pkf);
+	public_key_size = pkf->public_key_size;
+	if (public_key) {
+		srand(0);
+		sprintf(public_out_file, 
+				".tmp_pubkey_%d", rand());
+		err = write_file(public_out_file,
+						 public_key,
+						 public_key_size);
+		if (err != 0) {
+			goto _error;
+		}
+	} else {
+		err = 1;
+		goto _error;
+	}
+
+ _error:
+	if (value) free(value);
+	return err;
+}
+
+int pkfReadIssuer(char* opk_file, PPKF_ISSUER issuer) {
+	int err;
+	unsigned char* value;
+	unsigned long value_size;
+	PPKF pkf;
+
+	value = NULL;
+	value_size = 0;
+
+	err = read_file(opk_file, &value, &value_size);
+	if (err != 0) {
+		goto _error;
+	}
+
+	pkf = (PPKF)value;
+
+	memcpy(issuer->pkf_id, pkf->pkf_id, sizeof(XID));
+	strcpy(issuer->name, pkf->organization);
+
+ _error:
+	if (value) free(value);
+	return err;
+}

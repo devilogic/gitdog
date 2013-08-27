@@ -14,6 +14,7 @@
 usage() {
 	echo "gitdog command [options]"
 	echo "------------------------------"
+	echo "config 配置"
 	echo "make key <username> <email> 制作公私钥对"
 	echo "sign [license1,...] 对授权文件进行签名"
 	echo "import license [license1,...] 导入他人的授权文件"
@@ -56,6 +57,11 @@ gitdog_init() {
 	# 将授权文件放入到当前授权文件池的s目录中
 
 	return 0
+}
+
+gitdog_config() {
+	# git config --global user.name "devilogic"
+	# git config --global user.email "logic.yan@me.com"
 }
 
 gitdog_clone() {
