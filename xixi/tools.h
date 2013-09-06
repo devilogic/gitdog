@@ -233,7 +233,7 @@ static int verify_file(char* nanan_path,
 	unsigned long value_size;
 
 	srand(0);
-	sprintf(tmpfile, ".verify_%d", rand());
+	sprintf(tmpfile, ".verify.result_%d", rand());
 	
 	sprintf(buffer,
 			"%s -2 %d -3 %d -4 %d -v --import-public-key %s --import-sign %s %s > %s",
@@ -255,6 +255,17 @@ static int verify_file(char* nanan_path,
 
 	delete_file(tmpfile);
 	free(value);
+
+	return 0;
+}
+
+static int exist_file(char* file) {
+	FILE* fp;
+	fp = fopen(file, "rb");
+	if (fp) {
+		fclose(fp);
+		return 1;
+	}
 
 	return 0;
 }

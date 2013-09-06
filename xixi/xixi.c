@@ -12,6 +12,10 @@
 #include "tools.h"
 
 #define NANAN_PATH                 "./nanan"
+#define DEF_SIGN_ID                0
+#define DEF_CRYPT_ID               6
+#define DEF_HASH_ID                3
+#define DEF_PRNG_ID                0
 typedef struct _ARGUMENTS {
 	int show_version;
 	
@@ -22,12 +26,31 @@ typedef struct _ARGUMENTS {
 	int show_pkf;
 	int set_nanan;
 	int import_root;
+	int import_pkf;
+	int show_xlice;
+	int sign_xlice;
+	int import_private_key;
+
+	int crypt_id;
+	int sign_id;
+	int hash_id;
+	int prng_id;
 
 	char nanan_path[128];
+
 	char pkf_path[128];
-	char root_pkf_path[128];
+
+	union {
+		char owner_private_key_path[128];
+		char root_pkf_path[128];
+	};
+
+	char xlicense_path[128];
 } ARGUMENTS, *PARGUMENTS;
 
+char* g_nanan_path = NULL;
+
+#if 0
 ARGUMENTS g_arguments = {
 	0,                /* show version */
 	0,                /* make pkf */
@@ -37,20 +60,68 @@ ARGUMENTS g_arguments = {
 	0,                /* show pkf */
 	0,                /* set nanan path */
     0,                /* import root */
+	0,                /* import pkf */
+	0,                /* show xlicense */
+	0,                /* sign xlicense */
+	0,                /* import private key */
+	DEF_CRYPT_ID,
+	DEF_SIGN_ID,
+	DEF_HASH_ID,
+	DEF_PRNG_ID,
 	{0},              /* nanan path */
 	{0},              /* pkf path */
-    {0}               /* root pkf */
+    {0},              /* root pkf,opk path */
+	{0}               /* xlicense path */
 };
+#else
+ARGUMENTS g_arguments;
+#endif
+
+void init_arguments(PARGUMENTS arg) {
+	memset(arg, 0, sizeof(ARGUMENTS));
+	arg->crypt_id = DEF_CRYPT_ID;
+	arg->sign_id = DEF_SIGN_ID;
+	arg->hash_id = DEF_HASH_ID;
+	arg->prng_id = DEF_PRNG_ID;
+}
 
 void usage() {
 	printf("xixi [options]\n");
+	printf("[pkf]\n");
 	printf("--make-pkf(-p) <pkf path> make pkf file\n");
-	printf("--make-license(-l) <pkf path>\n make xlincense");
 	printf("--sign-pkf(-s) <pkf path> sign pkf file\n");
 	printf("--verify-pkf(-v) <pkf path> verify pkf file\n");
+	printf("--import-root-pkf <opk path> import root pkf file\n");
 	printf("--show-pkf <pkf path> show pkf content\n");
+	printf("\n");
+	printf("[xlicense]\n");
+	printf("--make-license(-l) <license path> make xlicense\n");
+	printf("--sign-license(-x) <license path> sign xlicense\n");
+	printf("--verify-license(-y) <license path> verify xlicense\n");
+	printf("--show-license <license path> show xlicense\n");
+	printf("--import-user-pkf <pkf path> import owner pkf\n");
+	printf("--import-owner-pkf <pkf path> import pirvate key\n");
+	printf("--import-private-key <pk path> import pirvate key\n");
+	printf("--import-public-key <pk path> import public key\n");
+	printf("--import-owner-pkf-id <owner id> import owner id\n");
+	printf("--import-private-key-password <password> the password of pkf private key\n");
+	printf("\n");
+	printf("[xfile]\n");
+	printf("--encrypt-file(-e) <file path> encrypt file\n");
+	printf("--decrypt-file(-d) <file path> decrypt file\n");
+	printf("--add-license-to-file <license path> add license to file\n");
+	printf("--del-license-to-file <license path> del license to file\n");
+	printf("--set-license-pool <path> set xlicense directory\n");
+	printf("--set-target-file(-t) <file path> set target file\n");
+	printf("\n");
+	printf("select algorithm---\n");
+	printf("--select-crypt(-1) <crypt id> select crypt algorithm\n");
+	printf("--select-sign(-2) <sign id> select sign algorithm\n");
+	printf("--select-hash(-3) <hash id> select hash algorithm\n");
+	printf("--select-prng(-4) <prng id>> select random algorithm\n");
+	printf("\n");
+	printf("[misc]\n");
 	printf("--set-nanan(-n) <nanan path> set nanan path\n");
-	printf("--import-root <opk path> import root pkf file\n");
 	printf("--version show version\n");
 	printf("\n");
 	printf("http://www.4dogs.cn\n");
@@ -59,19 +130,47 @@ void usage() {
 
 int handle_arguments(int argc, char* argv[]) {
 	int opt,show_version, longidx;
-	int import_root,show_pkf;
-	const char* short_opts = ":p:l:s:v:n:";
+	int import_root_pkf,show_pkf,show_license,
+		import_user_pkf,import_owner_pkf,import_private_key,
+		import_public_key,import_owner_pkf_id,import_private_key_password,
+		encrypt_file,decrypt_file,
+		add_license_to_file,del_license_to_file,
+		set_license_pool,
+		show_version;
+	const char* short_opts = ":p:l:s:v:n:x:y:e:d:t:1:2:3:4:";
 	struct option long_opts[] = {
 		/*0*/{"make-pkf",1,NULL,'p'},
-		/*1*/{"make-license",1,NULL,'l'},
-		/*2*/{"sign-pkf",1,NULL,'s'},
-		/*3*/{"verify-pkf",1,NULL,'v'},
-		/*4*/{"show-pkf",1,&show_pkf,0x2011},
-		/*5*/{"version",0,&show_version,0x2013},
-		/*6*/{"set-nanan",1,NULL,'n'},
-		/*7*/{"import-root",1,&import_root,0x2012},
+		/*1*/{"sign-pkf",1,NULL,'s'},
+		/*2*/{"verify-pkf",1,NULL,'v'},
+		/*3*/{"import-root-pkf",1,&import_root_pkf,0x2013},
+		/*4*/{"show-pkf",1,&show_pkf,0x2012},
+		/*5*/{"make-license",1,NULL,'l'},
+		/*6*/{"sign-license",1,NULL,'x'},
+		/*7*/{"verify-license",1,NULL,'y'},
+		/*8*/{"show-license",1,&show_license,0x2011},
+		/*9*/{"import-user-pkf",1,&import_user_pkf,0x2010},
+		/*10*/{"import-owner-pkf",1,&import_owner_pkf,0x2009},
+		/*11*/{"import-private-key",1,&import_private_key,0x2008},
+		/*12*/{"import-public-key",1,&import_public_key,0x2007},
+		/*13*/{"import-owner-pkf-id",1,&import_owner_pkf_id,0x2006},
+		/*14*/{"import-private-key-password",1,&import_private_key_password,0x2005},
+		/*15*/{"encrypt-file",1,&encrypt_file,0x2004},
+		/*16*/{"decrypt-file",1,&decrypt_file,0x2003},
+		/*17*/{"add-license-to-file",1,&add_license_to_file,0x2002},
+		/*18*/{"del-license-to-file",1,&del_license_to_file,0x2001},
+		/*19*/{"set-license-pool",1,&set_license_pool,0x2000},
+		/*20*/{"set-target-file",1,NULL,'t'},
+		/*21*/{"select-crypt",1,NULL,'1'},	    /* 选择加密算法 */
+		/*22*/{"select-sign",1,NULL,'2'},		/* 选择签名算法 */
+		/*23*/{"select-hash",1,NULL,'3'},		/* 选择哈希算法 */
+		/*24*/{"select-prng",1,NULL,'4'},		/* 选择随机算法 */
+		/*25*/{"set-nanan",1,NULL,'n'},
+		/*26*/{"version",0,&show_version,0x1993},
 		{0,0,0,0}
 	};
+
+	/* 初始化参数结构 */
+	init_arguments(&g_arguments);
 
 	while ((opt = getopt_long(argc, argv, short_opts, 
 							  long_opts, &longidx)) != -1) {
@@ -87,11 +186,27 @@ int handle_arguments(int argc, char* argv[]) {
 				g_arguments.show_pkf = 1;
 				strcpy(g_arguments.pkf_path,
 					   optarg);
+			} else if ((import_pkf == 0x2010) && (longidx == 8)) {
+				g_arguments.import_pkf = 1;
+				strcpy(g_arguments.pkf_path,
+					   optarg);
+			} else if ((show_license == 0x2009) && (longidx == 9)) {
+				g_arguments.show_xlice = 1;
+				strcpy(g_arguments.xlicense_path,
+					   optarg);
+			} else if ((import_private_key == 0x2008) && (longidx == 11)) {
+				g_arguments.import_private_key = 1;
+				strcpy(g_arguments.owner_private_key_path,
+					   optarg);
 			}
 			break;
 		case 's':
 			g_arguments.sign_pkf = 1;
 			strcpy(g_arguments.pkf_path, optarg);
+			break;
+		case 'x':
+			g_arguments.sign_xlice = 1;
+			strcpy(g_arguments.xlicense_path, optarg);
 			break;
 		case 'v':
 			g_arguments.verify_pkf = 1;
@@ -103,11 +218,23 @@ int handle_arguments(int argc, char* argv[]) {
 			break;
 		case 'l':
 			g_arguments.make_license = 1;
-			strcpy(g_arguments.pkf_path, optarg);
+			strcpy(g_arguments.xlicense_path, optarg);
 			break;
 		case 'n':
 			g_arguments.set_nanan = 1;
 			strcpy(g_arguments.nanan_path, optarg);
+			break;
+		case '4':
+			g_arguments.prng_id = atoi(optarg);
+			break;
+		case '3':
+			g_arguments.hash_id = atoi(optarg);
+			break;
+		case '2':
+			g_arguments.sign_id = atoi(optarg);
+			break;
+		case '1':
+			g_arguments.crypt_id = atoi(optarg);
 			break;
 		case '?':
 			printf("unknow options: %c\n", optopt);
@@ -209,10 +336,11 @@ static PPKF read_pkf_configure_from_stdin(int* make_key,
 	return pkf;
 }
 
+#define check_nanan(nanan_path) exist_file(nanan_path)
 int main(int argc, char* argv[]) {
 	int err, make_key;
 	PPKF pkf;
-	uuid_t uu;
+	PXLICENSE xlice;
 
 	if (argc == 1) {
 		usage();
@@ -225,41 +353,54 @@ int main(int argc, char* argv[]) {
 	}
 
 	if (strlen(g_arguments.nanan_path) == 0) {
-		strcpy(g_arguments.nanan_path, NANAN_PATH);
+		g_nanan_path = NANAN_PATH;
 	} else {
-		pkfSetNanan(g_arguments.nanan_path);
+		g_nanan_path = g_arguments.nanan_path;
+	}
+
+	if (check_nanan(g_nanan_path) == 0) {
+		printf("[-] nanan not exist\n");
+		return 1;
 	}
 
 	/* 处理命令行 */
 	if (g_arguments.show_version) {
 		printf("%s\n", XIXI_VERSION);
 	} else if (g_arguments.show_pkf) {
-		FILE* fp;
 		unsigned char* tmp;
 		unsigned long tmpsize;
-		fp = fopen(g_arguments.pkf_path, "rb");
-		if (!fp) {
-			printf("[-] open pkf file:%s error\n", g_arguments.pkf_path);
-			return 1;
-		}
-		
+
 		err = read_file(g_arguments.pkf_path,
 						&tmp,
 						&tmpsize);
 		if (err != 0) {
-			fclose(fp);
 			printf("[-] read pkf file%s error\n", g_arguments.pkf_path);
 			return 1;
 		}
-		fclose(fp);
 
 		pkf = (PPKF)tmp;
 		pkfShow(pkf);
 		free(tmp);
+	} else if (g_arguments.show_xlice) {
+		unsigned long xlice_size;
+		int err;
+
+		err = read_file(g_arguments.xlicense_path,
+						(unsigned char**)&xlice,
+						&xlice_size);
+		if (err != 0) {
+			printf("[-] read xlicense file%s error\n", g_arguments.xlicense_path);
+			return 1;
+		}
+
+		xliceShow(xlice);
+		xliceFree(xlice);
 	} else if (g_arguments.make_pkf) {
+		int err;
 		char private_key_path[256];
 		char public_key_path[256];
 
+		err = 0;
 		make_key = 0;
 		pkf = read_pkf_configure_from_stdin(&make_key,
 											public_key_path,
@@ -281,6 +422,8 @@ int main(int argc, char* argv[]) {
 
 		/* 写入文件 */
 		{
+#if 0
+			/* 使用直接的write_file来写入文件 */
 			FILE* fp;
 			int total;
 
@@ -295,16 +438,74 @@ int main(int argc, char* argv[]) {
 							  total, 
 							  fp)) != total) {
 				printf("[-] write pkf error\n");
-				goto _error;
+				pkfFree(pkf);
+				return 1;
 			}
 			fclose(fp);
+#else
+			err = write_file(g_arguments.pkf_path,
+							 (unsigned char*)pkf,
+							 pkf->file_size);
+			if (err != 0) {
+				printf("[-] write pkf error\n");
+				pkfFree(pkf);
+				return 1;
+			}
+#endif
 			printf("\n");
-			
 			pkfShow(pkf);
 			pkfFree(pkf);
 		}
-
 	} else if (g_arguments.make_license) {
+		int err;
+		PXLICENSE xlice;
+		
+		if (!g_arguments.import_pkf) {
+			printf("[-] not import pkf\n");
+			return 1;
+		}
+		
+		xlice = xliceAlloc(g_arguments.crypt_id,
+						   g_arguments.sign_id,
+						   g_arguments.hash_id,
+						   g_arguments.prng_id);
+
+		if (!xlice) {
+			printf("[-] alloc xlicense memory error\n");
+			return 1;
+		}
+		
+		err = xliceSetPKF(&xlice,
+						  g_arguments.pkf_path);
+		if (err != 0) {
+			xliceFree(xlice);
+			printf("[-] set pkf error\n");
+			return 1;
+		}
+
+		err = write_file(g_arguments.xlicense_path,
+						 (unsigned char*)xlice,
+						 xlice->file_size);
+		if (err != 0) {
+			xliceFree(xlice);
+			printf("[-] write xlicense file:%s error\n",
+				   g_arguments.xlicense_path);
+			return 1;
+		}
+
+		xliceFree(xlice);
+	} else if (g_arguments.sign_xlice) {
+		if (g_arguments.import_private_key == 0) {
+			printf("[-] not import owner private key\n");
+			return 1;
+		}
+
+		err = xliceSignIt(g_arguments.owner_private_key_path,
+						  g_arguments.xlicense_path);
+		if (err != 0) {
+			printf("[-] sign xlicense file:%s error\n",
+				   g_arguments.xlicense_path);
+		}
 	} else if (g_arguments.verify_pkf) {
 		PPKF pkf;
 		FILE* fp;

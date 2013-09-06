@@ -12,7 +12,11 @@
 #define PKF_PROP_SIGN                                     0x08
 #define PKF_PROP_ROOT                                     0x1000      /* 无任何颁发者 */
 
-typedef uuid_t    XID, *PXID;
+#define pkf_has_public(p) (p->property & PKF_PROP_PUBLIC != 0)
+#define pkf_has_private(p) (p->property & PKF_PROP_PRIVATE != 0)
+#define pkf_has_decrypt_private(p) (p->property & PKF_PROP_DECRYPT_PRIVATE != 0)
+#define pkf_signed(p) (p->property & PKF_PROP_SIGN != 0)
+#define pkf_is_root(p) (p->property & PKF_PROP_ROOT != 0)
 
 /* 颁发者的签名信息 */
 typedef struct _PKF_ISSUER {
@@ -28,6 +32,9 @@ typedef struct _PKF_V1 {
 	unsigned int magic;
 	unsigned int version;
 	unsigned int file_size;                      /* 证书大小 */
+	PKF_ISSUER issuer;                           /* 颁发者 */
+	char email[128];
+	char organization[128];
 
 	unsigned char checksum[20];                  /* sha1 */
 
@@ -40,17 +47,12 @@ typedef struct _PKF_V1 {
 
 	/* 证书信息 */
 	XID pkf_id;                                   /* 证书的唯一ID */
-	char email[128];
-	char organization[128];
 
 	/* 加密私钥所需的密码HASH值 */
 	union {
 		char password[32];
 		unsigned char password_hash[20];
 	};
-
-	/* 颁发者 */
-	PKF_ISSUER issuer;
 
 	/* 时间相关 */
 	unsigned long begin_time;                       /* 颁发的时间 */
@@ -118,8 +120,6 @@ PPKF pkfSign(char* pkf_file,
 int pkfVerify(char* pkf_file, 
 			  char* opp_file,
 			  int* result);
-
-void pkfSetNanan(char* nanan_path);
 
 int pkfReadPrivateKey(char* opk_file, 
 					  char* private_out_file,

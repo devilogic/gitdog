@@ -1,40 +1,3 @@
-static int checksum_file(PPKF pkf) {
-	int err;
-	unsigned char* sha1;
-	unsigned long sha1_size;
-	char tmpfile[256] = {0};
-
-	err = 0;
-
-	srand(0);
-	sprintf(tmpfile, ".checksum_%d", rand());
-
-	sha1 = (unsigned char*)&(pkf->checksum_start);
-	sha1_size = pkf->file_size - ((unsigned char*)pkf - sha1);
-
-	err = write_file(tmpfile, sha1, sha1_size);
-	if (err != 0) {
-		return 1;
-	}
-
-	sha1 = NULL;
-	sha1_size = 0;
-	err = hash_file(g_nanan_path, tmpfile, 2, &sha1, &sha1_size);
-	if (err != 0) {
-		delete_file(tmpfile);
-	}
-
-	memcpy(pkf->checksum, sha1, sha1_size);
-
-	delete_file(tmpfile);
-	free(sha1);
-	return err;
-}
-
-static int checksum_diff(PPKF pfk, unsigned char* checksum) {
-	return 0;
-}
-
 static unsigned char* get_crypt_private_key_struct(PPKF pkf) {
 	unsigned char* p;
 	p = (unsigned char*)pkf;
@@ -112,3 +75,39 @@ static unsigned char* get_sign(PPKF pkf) {
 	return sign;
 }
 
+static int pkf_checksum_file(PPKF pkf) {
+	int err;
+	unsigned char* sha1;
+	unsigned long sha1_size;
+	char tmpfile[256] = {0};
+
+	err = 0;
+
+	srand(0);
+	sprintf(tmpfile, ".checksum_%d", rand());
+
+	sha1 = (unsigned char*)&(pkf->checksum_start);
+	sha1_size = pkf->file_size - ((unsigned char*)pkf - sha1);
+
+	err = write_file(tmpfile, sha1, sha1_size);
+	if (err != 0) {
+		return 1;
+	}
+
+	sha1 = NULL;
+	sha1_size = 0;
+	err = hash_file(g_nanan_path, tmpfile, 2, &sha1, &sha1_size);
+	if (err != 0) {
+		delete_file(tmpfile);
+	}
+
+	memcpy(pkf->checksum, sha1, sha1_size);
+
+	delete_file(tmpfile);
+	free(sha1);
+	return err;
+}
+
+static int pkf_checksum_diff(PPKF pkf, unsigned char* checksum) {
+	return memcmp(pkf->checksum, checksum, 20);
+}

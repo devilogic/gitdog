@@ -7,62 +7,7 @@
 #include <strings.h>
 #include <uuid/uuid.h>
 
-static char* g_nanan_path = NULL;
-
-static char* g_hash_algorithm[] = {
-	"sha256",
-	"tiger",
-	"sha1",
-	"md5",
-	"sha384",
-	"sha512",
-	"md4",
-	"md2",
-	"rmd128",
-	"rmd160",
-	"sha224",
-	"whirlpool",
-	"chc_hash"
-};
-
-static char* g_sign_algorithm[] = {
-	"rsa",
-	"ecc",
-	"dsa",
-	"dh"
-};
-
-static char* g_prng_algorithm[] = {
-	"yarrow",
-	"sprng",
-	"sober128",
-	"fortuna",
-	"rc4"
-};
-
-static char* g_crypt_algorithm[] = {
-	"blowfish",
-	"xtea",
-	"rc5",
-	"rc6",
-	"safer+",
-	"NULL",
-	"aes",
-	"twofish",
-	"safer-k64",
-	"safer-sk64",
-	"safer-k128",
-	"safer-sk128",
-	"rc2",
-	"des",
-	"3des",
-	"cast5",
-	"noekeon",
-	"skipjack",
-	"khazad",
-	"anubis"
-};
-
+#include "common.h"
 #include "tools.h"
 #include "pkf_tools.h"
 #include "pkf_show.h"
@@ -324,7 +269,7 @@ PPKF pkfMake(PPKF pkf,
 		pkf = (PPKF)tmp2;
 		
 		/* 计算校验和 */
-		if (checksum_file(pkf) != 0) {
+		if (pkf_checksum_file(pkf) != 0) {
 			goto _error;
 		}
 	}
@@ -367,6 +312,9 @@ PPKF pkfSign(char* pkf_file,
 		goto _error;
 	}
 	
+	pkf->property &= ~PKF_PROP_ROOT;  	/* 这里取消掉根证书的属性 */
+	pkf->property |= PKF_PROP_SIGN;     /* 写入签名属性 */
+
 	/* 需要签名的内容就是在checksum以下的内容 */
 	sign_data = (unsigned char*)&(pkf->sign_start);
 	sign_size = pkf->file_size - (int)(sign_data - tmp);
@@ -411,18 +359,12 @@ PPKF pkfSign(char* pkf_file,
 			   issuer,
 			   sizeof(PKF_ISSUER));
 
-		/* 这里取消掉根证书的属性 */
-		pkf->property &= ~PKF_PROP_ROOT;
-
-		/* 写入签名属性 */
-		pkf->property |= PKF_PROP_SIGN;
-
 		/* 重新计算PKF文件长度 */
 		pkf->file_size += tmp_sign_size;
 	}
 
 	/* 重新计算校验和 */
-	if ((err = checksum_file(pkf))!= 0) {
+	if ((err = pkf_checksum_file(pkf))!= 0) {
 		goto _error;
 	}
 
@@ -488,6 +430,8 @@ int pkfVerify(char* pkf_file,
 	/* 需要签名的内容就是在checksum以下的内容 */
 	sign_data = (unsigned char*)&(pkf->sign_start);
 	sign_data_size = pkf->file_size - (int)(sign_data - tmp);
+	/* 再减去签名数据的大小 */
+	sign_data_size -= pkf->issuer.sign_size;
 	
 	if (sign_data_size <= 0) {
 		goto _error;
@@ -535,10 +479,6 @@ int pkfVerify(char* pkf_file,
 	return err;
 }
 
-void pkfSetNanan(char* nanan_path) {
-	g_nanan_path = nanan_path;
-}
-
 int pkfReadPrivateKey(char* opk_file, 
 					  char* private_out_file,
 					  char* password) {
@@ -568,12 +508,15 @@ int pkfReadPrivateKey(char* opk_file,
 
 	/* 判断当前PKF是否存在私钥 */
 	if (pkf->property & PKF_PROP_PRIVATE == 0) {
+		err = 1;
 		goto _error;
 	}
 	
 	_private_key = get_private_key(pkf);
-	if (_private_key == NULL)
+	if (_private_key == NULL) {
+		err = 1;
 		goto _error;
+	}
 	_private_key_size = pkf->private_key_size;
 
 	/* 如果私钥没有加密则直接跳过加密过程 */
@@ -594,6 +537,7 @@ int pkfReadPrivateKey(char* opk_file,
 	}
 
 	if (memcmp(hash, pkf->password_hash, hash_size) != 0) {
+		err = 1;
 		goto _error;
 	}
 
@@ -708,3 +652,4 @@ int pkfReadIssuer(char* opk_file, PPKF_ISSUER issuer) {
 	if (value) free(value);
 	return err;
 }
+

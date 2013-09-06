@@ -3,10 +3,34 @@
 
 #include "pkf.h"
 
-#define XLICE_PROP_NOT_AUTHED                    0x01
-#define XLICE_PROP_AUTHED                        0x02
-#define XLICE_PROP_0                             0x04         /* 自己的执照 */
-#define XLICE_PROP_3                             0x08         /* 用于交换的执照 */
+#define XLICE_MAGIC                             0x1993
+#define XLICE_VERSION                           0x0001
+
+#define XLICE_PROP_AUTHED                        0x01
+#define XLICE_PROP_0                             0x02         /* owner执照 */
+
+#if !defined(LARGE_XCHANGE_NODE)
+#define MAX_XCHANGE_NODE                         32           /* 一个项目组内的最大人数 */
+#else
+#define MAX_XCHANGE_NODE                         128
+#endif
+
+#define xlice_check_magic(x) (x->magic == XLICE_MAGIC)
+#define xlice_check_version(x) (x->version == XLICE_VERSION)
+
+typedef struct _XCHANGE_ID {
+	int invalid;
+	XID id;                                       /* XL的ID */
+} XCHANGE_ID;
+
+typedef struct _XCHANGE_LIST {
+	unsigned int xchange_node_count;
+	XCHANGE_ID list[MAX_XCHANGE_NODE];
+	unsigned int xchange_sign_size;               /* xchange的签名大小 */
+	/* 跟随一个签名 */
+} XCHANGE_LIST;
+
+#define xchange_list_size(n) (sizeof(XCHANGE_LIST) + n->xchange_sign_size);
 
 /*
  * XLICENSE用于在一个项目，加解密文件与核实用户身份
@@ -18,37 +42,72 @@
  * 交给项目owner,owner对其进行设定链操作
  * 
  * 加解密操作：
- * 1.用自己公钥证书字符串形式 + password字段的HASH值的字符串作为密码进行加解密
+ * 1.使用XL文件进行加密
  */
 typedef struct _XLICENSE {
 	unsigned int magic;
 	unsigned int version;
+	unsigned int file_size;
 	unsigned char checksum[16];
 
 	/* 以下部分是owner进行签名的部分 */
 
-	char project_name[128];
-	unsigned char project_hash[16];               /* owner的license的sha1值 */
+	union {
+		unsigned int property;
+		unsigned int sign_start;
+		unsigned int checksum_start;
+	};
+#if defined(WITH_PROJECT_NAME)
+	char project_name[64];                        /* 从owner的license的名称中复制 */
+#endif
+	XID owner_id;                                 /* owner的license的XID,如果是owner此项全0 */
+	XID id;                                       /* 当前license的ID */
 
-	unsigned int property;
-	unsigned int xchange_size;                    /* 相互交换的数据大小 */
-	unsigned int xchange_sign_size;               /* xchange的签名大小 */
-
+	unsigned int xchange_count;                   /* 有多少个交换链 */
 	unsigned int sign_size;                       /* owner的签名 */
-
-	char password[128];                           /* 授权文件加密其他文件时使用的密码 */
-
-	int crypt_id;                                 /* 使用什么加密算法 */
-	int hash_id;                                  /* 使用什么HASH算法 */
+	int sign_id;
+	int hash_id;                                  /* HASH算法ID */
+	int crypt_id;                                 /* 加密算法ID */
+	int prng_id;                                  /* 随机算法ID */
 
 	/* 保存了公钥的证书(属主) */
-	PKF pfk;
+	/*PKF pfk;*/
 	
-	/* 以上部分是owner进行签名的部分 */
-
 	/* 跟随一个owner的签名 */
-    /* 跟随一组xchange数据(xchange_count个XID) */
-	/* 跟随xchange的owner的签名 */
+    /* 跟随一组xchange数据(xchange_count个结构) */
 } XLICENSE, *PXLICENSE;
+
+PXLICENSE xliceAlloc(int crypt_id,
+					 int sign_id,
+					 int hash_id,
+					 int prng_id);
+
+int xliceFree(PXLICENSE xlice);
+
+int xliceSetPKF0(PXLICENSE* xlice, 
+				 PPKF pkf);
+
+int xliceSetPKF(PXLICENSE* xlice, 
+				char* pkf_path);
+
+#if defined(WITH_PROJECT_NAME)
+int xliceSetProjectName(PXLICENSE xlice,
+						char* project_name);
+
+int xliceSetProjectName2(PXLICENSE xlice,
+						 char* user_xlice_file);
+#endif
+
+int xliceSetOwnerID(PXLICENSE xlice,
+					char* owner_id);
+
+int xliceSignIt0(char* owner_private_key, 
+				 PXLICENSE xlice);
+
+int xliceSignIt(char* owner_pkf,
+				char* user_xlice_file,
+				char* password);
+
+void xliceShow(PXLICENSE xlice);
 
 #endif

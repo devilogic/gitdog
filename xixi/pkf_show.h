@@ -1,35 +1,3 @@
-static void show_xid(XID xid) {
-	int i;
-	for (i = 0; i < 16; i++)
-		printf("%02x", xid[i]);
-	printf("\n");
-	return;
-}
-
-static char* show_hash_algorithm(int hash_id) {
-	return g_hash_algorithm[hash_id];
-}
-
-static char* show_sign_algorithm(int sign_id) {
-	return g_sign_algorithm[sign_id];
-}
-
-static char* show_prng_algorithm(int prng_id) {
-	return g_prng_algorithm[prng_id];
-}
-
-static char* show_crypt_algorithm(int crypt_id) {
-	return g_crypt_algorithm[crypt_id];
-}
-
-static void show_key(unsigned char* key, unsigned int size) {
-	unsigned int i;
-	for(i = 0; i < size; i++) {
-		printf("%02x", key[i]);
-	}
-	printf("\n");
-}
-
 static void show_sign(PPKF pkf) {
 	unsigned char* sign;
 	unsigned long sign_size;
