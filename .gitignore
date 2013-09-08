@@ -2,6 +2,7 @@ nanan
 gitdog
 *.o
 *.a
+*.so
 *.pdf
 *.dvi
 *.exe

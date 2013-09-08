@@ -12,6 +12,11 @@
 #include "pkf_tools.h"
 #include "pkf_show.h"
 
+#define PKF_ONLY                   0
+#define PKF_PUBLIC                 1
+#define PKF_PRIVATE                2
+#define PKF_PUBLIC_PRIVATE         3
+
 void pkfShow(PPKF pkf) {
 	show_pkf(pkf);
 }
@@ -55,6 +60,7 @@ PPKF pkfAlloc(int hash_id,
 		strcpy(pkf->password, password);
 	}
 	pkf->crypt_id = crypt_id;
+	pkf->property = PKF_HEADER;
 
 	return pkf;
 }
@@ -64,8 +70,8 @@ void pkfFree(PPKF_V1 pkf) {
 		free(pkf);
 }
 
-int pkfMakeKeyPair(char* public_key_path,
-				   char* private_key_path) {
+//int pkfMakeKeyPair(char* public_key_path, char* private_key_path) {
+int pkfMakeKeyPair() {
 	int err;
 	char buffer[128] = {0};
 
@@ -87,7 +93,6 @@ int pkfMakeKeyPair(char* public_key_path,
 
 #if 0
 	if (private_key_path) {
-
 		err = read_file("./private.key", 
 						&private_key,
 						&private_key_size);
@@ -137,6 +142,7 @@ int pkfMakeKeyPair(char* public_key_path,
  */
 PPKF pkfMake(PPKF pkf, 
 			 int make_key, 
+			 int type,
 			 char* public_key_path,
 			 char* private_key_path) {
 	int err, t, size;
@@ -146,6 +152,10 @@ PPKF pkfMake(PPKF pkf,
 	int crypt_id;
 	unsigned char* value;
 	unsigned long value_size;
+
+	if (type == PKF_ONLY) {
+		goto _end;
+	}
 
 	t = 0;    /* 底下要用 */
 	memset(buffer, 0, 256);
@@ -157,8 +167,8 @@ PPKF pkfMake(PPKF pkf,
 		/*
 		 * 生成公私钥对
 		 */
-		err = pkfMakeKeyPair(public_key_path,
-							 private_key_path);
+		//err = pkfMakeKeyPair(public_key_path, private_key_path);
+		err = pkfMakePair();
 		if (err != 0)
 			goto _error;
 	}
@@ -167,84 +177,88 @@ PPKF pkfMake(PPKF pkf,
 	memset(tmp, 0, 10240);
 
 	/* 私钥不为空 */
-	if (private_key_path || strlen(private_key_path)) {
-		unsigned char* private_key;
-		PKF_PRIVATE_KEY_SECURITY security;
+	if ((type == PKF_PRIVATE) || (type == PKF_PUBLIC_PRIVATE)) {
+		if (private_key_path && strlen(private_key_path)) {
+			unsigned char* private_key;
+			PKF_PRIVATE_KEY_SECURITY security;
 
-		pkf->property |= PKF_PROP_PRIVATE;
+			pkf->property |= PKF_PROP_PRIVATE;
 
-		if (strlen(password)) {
-			security.crypt_id = crypt_id;
-			memcpy(tmp, &security, sizeof(PKF_PRIVATE_KEY_SECURITY));
-			t = sizeof(PKF_PRIVATE_KEY_SECURITY);
-			pkf ->property |= PKF_PROP_DECRYPT_PRIVATE;	
+			if (strlen(password)) {
+				security.crypt_id = crypt_id;
+				memcpy(tmp, &security, sizeof(PKF_PRIVATE_KEY_SECURITY));
+				t = sizeof(PKF_PRIVATE_KEY_SECURITY);
+				pkf ->property |= PKF_PROP_DECRYPT_PRIVATE;	
 
-			private_key = tmp + t;
+				private_key = tmp + t;
 
-			/*
-			 * 使用密码进行加密并输出到当前目录
-			 */
-			err = crypt_file(g_nanan_path,
-							 private_key_path,
-							 security.crypt_id,
-							 2,
-							 1,
-							 password,
-							 &value,
-							 &value_size);
+				/*
+				 * 使用密码进行加密并输出到当前目录
+				 */
+				err = crypt_file(g_nanan_path,
+								 private_key_path,
+								 security.crypt_id,
+								 2,
+								 1,
+								 password,
+								 &value,
+								 &value_size);
 
-			if (err != 0) {
-				goto _error;
-			}
+				if (err != 0) {
+					goto _error;
+				}
 
-			memcpy(private_key, value, value_size);
-			pkf->private_key_size = value_size;
-			t += value_size;
-			freev(value);
+				memcpy(private_key, value, value_size);
+				pkf->private_key_size = value_size;
+				t += value_size;
+				freev(value);
 
-			/* 计算密码的SHA1值 */
-			err = hash_string(g_nanan_path, 
-							  password, 
-							  2, 
-							  &value, 
-							  &value_size);
-			if (err != 0) {
-				goto _error;
-			}
-			memcpy(pkf->password_hash, value, value_size);
-			freev(value);
-		} else {
-			err = read_file(private_key_path, &value, &value_size);
-			if (err != 0)
-				goto _error;
+				/* 计算密码的SHA1值 */
+				err = hash_string(g_nanan_path, 
+								  password, 
+								  2, 
+								  &value, 
+								  &value_size);
+				if (err != 0) {
+					goto _error;
+				}
+				memcpy(pkf->password_hash, value, value_size);
+				freev(value);
+			} else {
+				err = read_file(private_key_path, &value, &value_size);
+				if (err != 0)
+					goto _error;
 
-			private_key = tmp;
-			memcpy(private_key, value, value_size);
-			pkf->private_key_size = value_size;
-			t += value_size;
-			freev(value);
-		}/* end else */
+				private_key = tmp;
+				memcpy(private_key, value, value_size);
+				pkf->private_key_size = value_size;
+				t += value_size;
+				freev(value);
+			}/* end else */
+		}
 	}
 
 	/* 公钥不为空 */
-	if (public_key_path || strlen(public_key_path)) {
-		unsigned char* public_key;
+	if ((type == PKF_PUBLIC) || (type == PKF_PUBLIC_PRIVATE)) {
+		if (public_key_path && strlen(public_key_path)) {
+			unsigned char* public_key;
 
-		pkf->property |= PKF_PROP_PUBLIC;
+			pkf->property |= PKF_PROP_PUBLIC;
 
-		public_key = tmp + t;
+			public_key = tmp + t;
 		
-		err = read_file(public_key_path, &value, &value_size);
-		if (err != 0)
-			goto _error;
+			err = read_file(public_key_path, &value, &value_size);
+			if (err != 0)
+				goto _error;
 
-		memcpy(public_key, value, value_size);
-		pkf->public_key_size = value_size;
-		t += value_size;
-		freev(value);
+			memcpy(public_key, value, value_size);
+			pkf->public_key_size = value_size;
+			t += value_size;
+			freev(value);
+		}
 	}
 
-	/* 由于是新建证书,没有办法者，所以这里算作是根证书 */
+	/* 由于是新建证书,没有颁发者，所以这里算作是根证书 */
 	pkf->property |= PKF_PROP_ROOT;
 
 	/* 计算PKF证书总长度 */
@@ -274,6 +288,7 @@ PPKF pkfMake(PPKF pkf,
 		}
 	}
 
+ _end:
 	return pkf;
  _error:
 	if (tmp) free(tmp);

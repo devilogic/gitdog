@@ -99,14 +99,13 @@ int xliceSetProjectName2(PXLICENSE xlice,
 #endif
 
 int xliceSetOwnerID(PXLICENSE xlice,
-					char* owner_id);
+					unsigned char* owner_id);
 
 int xliceSignIt0(char* owner_private_key, 
 				 PXLICENSE xlice);
 
-int xliceSignIt(char* owner_pkf,
-				char* user_xlice_file,
-				char* password);
+int xliceSignIt(char* owner_private_key,
+				char* user_xlice_file);
 
 void xliceShow(PXLICENSE xlice);
 

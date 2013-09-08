@@ -6,6 +6,7 @@
 #define PKF_MAGIC                                        0x1983
 #define PKF_VERSION                                      0x0001
 
+#define PKF_HEADER                                        0x00
 #define PKF_PROP_PUBLIC                                   0x01
 #define PKF_PROP_PRIVATE                                  0x02
 #define PKF_PROP_DECRYPT_PRIVATE                          0x04
@@ -105,8 +106,7 @@ void pkfFree(PPKF pkf);
 
 void pkfShow(PPKF pkf);
 
-int pkfMakeKeyPair(char* public_key_path,
-				   char* private_key_path);
+int pkfMakeKeyPair();
 
 PPKF pkfMake(PPKF pkf, 
 			 int make_key, 
