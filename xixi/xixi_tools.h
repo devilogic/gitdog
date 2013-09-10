@@ -1,16 +1,27 @@
 #define NANAN_PATH                 "./nanan"
 
-//#define PKF_ONLY                   0
-//#define PKF_PUBLIC                 1
-//#define PKF_PRIVATE                2
-//#define PKF_PUBLIC_PRIVATE         3
+#if defined(INPUT_CRYPT_ALGORITHM)
 static PPKF read_pkf_configure_from_stdin(int* make_key, 
 										  int* type,
 										  char* public_key_path,
-										  char* private_key_path) {
+										  char* private_key_path) 
+#else
+static PPKF read_pkf_configure_from_stdin(int* make_key, 
+										  int* type,
+										  char* public_key_path,
+										  char* private_key_path,
+										  int crypt_id,
+										  int sign_id,
+										  int hash_id,
+										  int prng_id)
+#endif
+{
 	int err, c;
 	PPKF pkf;
+
+#if defined(INPUT_CRYPT_ALGORITHM)
 	int hash_id, sign_id, prng_id, crypt_id;
+#endif
 	char password[128];
 	int end_data;
 	char* s;
@@ -22,6 +33,8 @@ static PPKF read_pkf_configure_from_stdin(int* make_key,
 	s = gets(email);
 	printf("organization:");
 	s = gets(organ);
+
+#if defined(INPUT_CRYPT_ALGORITHM)
 	printf("hash algorithm:");
 	s = gets(buffer);
 	hash_id = atoi(buffer);
@@ -31,6 +44,7 @@ static PPKF read_pkf_configure_from_stdin(int* make_key,
 	printf("prng algorithm:");
 	s = gets(buffer);
 	prng_id = atoi(buffer);
+#endif
 
 	{	
 		/* 到期日期 */
@@ -82,9 +96,11 @@ static PPKF read_pkf_configure_from_stdin(int* make_key,
 		
 		/* 私有密钥的加密 */
 		if ((*type == PKF_PRIVATE) || (*type == PKF_PUBLIC_PRIVATE)) {
+#if defined(INPUT_CRYPT_ALGORITHM)
 			printf("crypt private key algorithm:");
 			s = gets(buffer);
 			crypt_id = atoi(buffer);
+#endif
 			printf("password(max 32 character):");
 			s = gets(buffer);
 			strcpy(password, buffer);

@@ -1,8 +1,14 @@
+static int exec_command(char* buffer) {
+	int ret;
+	ret = system(buffer);
+	return ret;
+}
+
 static int delete_file(char* file) {
 	char buffer[1024];
 	
 	sprintf(buffer, "rm -f %s", file);
-	system(buffer);
+	exec_command(buffer);
 
 	return 0;
 }
@@ -98,7 +104,7 @@ static int hash_file(char* nanan_path,
 
 	sprintf(buffer, "%s --silent -3 %d -h -o %s %s",
 			nanan_path, hash_id, tmpfile, file);
-	system(buffer);
+	exec_command(buffer);
 
 	err = read_file(tmpfile, value, value_size);
 	
@@ -124,7 +130,7 @@ static int hash_string(char* nanan_path,
 			data,
 			nanan_path,
 			tmpfile);
-	system(buffer);
+	exec_command(buffer);
 
 	/* 读取HASH值 */
 	err = read_file(tmpfile, value, value_size);
@@ -176,7 +182,7 @@ static int crypt_file(char* nanan_path,
 				tmpfile,
 				file);
 	}
-	system(buffer);
+	exec_command(buffer);
 
 	err = read_file(tmpfile, value, value_size);
 
@@ -210,7 +216,7 @@ static int sign_file(char* nanan_path,
 			private_file,
 			tmpfile,
 			file);
-	system(buffer);
+	exec_command(buffer);
 
 	err = read_file(tmpfile, value, value_size);
 
@@ -245,7 +251,7 @@ static int verify_file(char* nanan_path,
 			signdata_file,
 			file,
 			tmpfile);
-	system(buffer);
+	exec_command(buffer);
 
 	err = read_file(tmpfile, &value, &value_size);
 	if (memcmp(value, "[+]", 3) == 0)

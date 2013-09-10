@@ -54,8 +54,6 @@ static char* g_crypt_algorithm[] = {
 	"anubis"
 };
 
-typedef uuid_t    XID, *PXID;
-
 static void show_xid(XID xid) {
 	int i;
 	for (i = 0; i < 16; i++)

@@ -23,13 +23,14 @@ static void show_xlice(PXLICENSE xlice) {
 	printf("CRYPT ALGORITHM = %s\n", 
 		   show_crypt_algorithm(xlice->crypt_id));
 	printf("SIGN ALGORITHM = %s\n", 
-		   show_sign_algorithm(xlice->sign_id));
+		   show_sign_algorithm(xlice->pkf->sign_support.sign_id));
 	printf("HASH ALGORITHM = %s\n", 
-		   show_hash_algorithm(xlice->hash_id));
+		   show_hash_algorithm(xlice->pkf->sign_support.hash_id));
 	printf("PRNG ALGORITHM = %s\n", 
-		   show_prng_algorithm(xlice->prng_id));
+		   show_prng_algorithm(xlice->pkf->sign_support.prng_id));
 
-	printf("XCHANGE COUNT = %d\n", xlice->xchange_count);
-	printf("SIGN SIZE = %d\n", xlice->sign_size);
-	show_sign(xlice);
+	if (xlice->sign_size) {
+		printf("SIGN SIZE = %d\n", xlice->sign_size);
+		show_sign(xlice);
+	}
 }

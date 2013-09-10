@@ -5,17 +5,11 @@
 #include <time.h>
 #include <string.h>
 #include <strings.h>
-#include <uuid/uuid.h>
 
 #include "common.h"
 #include "tools.h"
 #include "pkf_tools.h"
 #include "pkf_show.h"
-
-#define PKF_ONLY                   0
-#define PKF_PUBLIC                 1
-#define PKF_PRIVATE                2
-#define PKF_PUBLIC_PRIVATE         3
 
 void pkfShow(PPKF pkf) {
 	show_pkf(pkf);
@@ -168,7 +162,7 @@ PPKF pkfMake(PPKF pkf,
 		 * 生成公私钥对
 		 */
 		//err = pkfMakeKeyPair(public_key_path, private_key_path);
-		err = pkfMakePair();
+		err = pkfMakeKeyPair();
 		if (err != 0)
 			goto _error;
 	}

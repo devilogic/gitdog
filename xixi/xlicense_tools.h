@@ -12,7 +12,7 @@ static int get_owner_pkf_id(char* pkf_file, XID id) {
 		goto _error;
 	}
 
-	memcpy(id, pkf->id, sizeof(XID));
+	memcpy(id, pkf->pkf_id, sizeof(XID));
 
  _error:
 	return err;
@@ -20,14 +20,36 @@ static int get_owner_pkf_id(char* pkf_file, XID id) {
 
 static unsigned char* get_sign(PXLICENSE xlice) {
 	unsigned char* sign;
+	unsigned int size;
 
 	if (xlice->property & XLICE_PROP_AUTHED == 0) {
 		return NULL;
 	}
 
-	sign = (unsigned char*)xlice + sizeof(XLICENSE);
+	size = sizeof(XLICENSE) + sizeof(PKF) + xlice->sign_size;
+	if (xlice->file_size < size) {
+		return NULL;
+	}
+
+	sign = (unsigned char*)xlice + sizeof(XLICENSE) + sizeof(PKF);
 
 	return sign;
+}
+
+static PPKF get_pkf(PXLICENSE xlice) {
+	PPKF pkf;
+	unsigned int size;
+
+	size = sizeof(XLICENSE) + sizeof(PKF);
+
+	if (xlice->file_size < size) {
+		return NULL;
+	}
+
+	pkf = (PPKF)((unsigned char*)xlice + sizeof(XLICENSE));
+	xlice->pkf = pkf;
+
+	return pkf;
 }
 
 static int xlice_checksum_file(PXLICENSE xlice) {

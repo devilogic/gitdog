@@ -11,9 +11,6 @@
 #include "xcontent.h"
 #include "tools.h"
 
-#define PKF_FUNCTION
-#define XLICE_FUNCTION
-
 char* g_nanan_path = NULL;                      /* 南南的唯一路径 */
 
 #include "arguments.h"
@@ -53,10 +50,21 @@ int main(int argc, char* argv[]) {
 
 		err = 0;
 		make_key = 0;
+#if defined(INPUT_CRYPT_ALGORITHM)
 		pkf = read_pkf_configure_from_stdin(&make_key,
 											&type,
 											public_key_path,
 											private_key_path);
+#else
+		pkf = read_pkf_configure_from_stdin(&make_key,
+											&type,
+											public_key_path,
+											private_key_path,
+											g_arguments.crypt_id,
+											g_arguments.sign_id,
+											g_arguments.hash_id,
+											g_arguments.prng_id);
+#endif
 		if (pkf == NULL) {
 			printf("[-] make pkf header error\n");
 			return 1;
@@ -184,11 +192,7 @@ int main(int argc, char* argv[]) {
 			return 1;
 		}
 		
-		xlice = xliceAlloc(g_arguments.crypt_id,
-						   g_arguments.sign_id,
-						   g_arguments.hash_id,
-						   g_arguments.prng_id);
-
+		xlice = xliceAlloc(g_arguments.crypt_id);
 		if (!xlice) {
 			printf("[-] alloc xlicense memory error\n");
 			return 1;
@@ -208,16 +212,30 @@ int main(int argc, char* argv[]) {
 		if (err != 0) {
 			xliceFree(xlice);
 			printf("[-] write xlicense file:%s error\n",
-				   g_arguments.xlicense_path);
+				   g_arguments.license_path);
 			return 1;
 		}
 
+		xliceShow(xlice);
 		xliceFree(xlice);
 	} else if (g_arguments.sign_license) {
-		char owner_private_key_path[256];
+		char password[32];
+		//char owner_private_key_path[256];
+		memset(password, 0, 32);
 
 		if (g_arguments.import_owner_pkf == 0) {
 			printf("[-] not import owner pkf\n");
+			return 1;
+		}
+
+		/* 确定文件是否存在 */
+		if (exist_file(g_arguments.owner_pkf_path) == 0) {
+			printf("[-] owner pkf is not exist\n");
+			return 1;
+		}
+
+		if (exist_file(g_arguments.license_path) == 0) {
+			printf("[-] xlicense file is not exist\n");
 			return 1;
 		}
 
@@ -227,6 +245,8 @@ int main(int argc, char* argv[]) {
 			printf("[-] miss private key password\n");
 			return 1;
 		}
+
+		/*
 		err = pkfReadPrivateKey(g_arguments.owner_pkf_path,
 								owner_private_key_path,
 								password);
@@ -234,15 +254,37 @@ int main(int argc, char* argv[]) {
 			printf("[-] read private key error\n");
 			return 1;
 		}
-
-		err = xliceSignIt(owner_private_key_path,
-						  g_arguments.license_path);
+		*/
+		err = xliceSignIt(g_arguments.owner_pkf_path,
+						  g_arguments.license_path,
+						  g_arguments.private_key_password);
 		if (err != 0) {
 			printf("[-] sign xlicense file:%s error\n",
 				   g_arguments.license_path);
 			return 1;
 		}
 	} else if (g_arguments.verify_license) {
+		int result;
+
+		if (g_arguments.import_owner_pkf == 0) {
+			printf("[-] not import owner pkf\n");
+			return 1;
+		}
+
+		err = xliceVerify(g_arguments.owner_pkf_path,
+						  g_arguments.license_path,
+						  &result);
+		if (err != 0) {
+			printf("[-] verify xlicense file:%s error\n",
+				   g_arguments.license_path);
+			return 1;
+		}
+		
+		if (result == 0) {
+			printf("[-] verify failed\n");
+		} else {
+			printf("[+] verify success\n");
+		}
 	} else if (g_arguments.show_license) {
 		err = read_file(g_arguments.license_path,
 						(unsigned char**)&xlice,
@@ -252,6 +294,7 @@ int main(int argc, char* argv[]) {
 			return 1;
 		}
 
+		xliceSetPKF1(xlice);
 		xliceShow(xlice);
 		xliceFree(xlice);
 	} else if (g_arguments.encrypt_file) {
@@ -265,6 +308,6 @@ int main(int argc, char* argv[]) {
 	return 0;
  _error:
 	if (pkf) pkfFree(pkf);
-	if (xlice) pkfFree(xlice);
+	if (xlice) xliceFree(xlice);
 	return err;
 }

@@ -1,7 +1,7 @@
 #if !defined(__PKF_H__)
 #define __PKF_H__
 
-#include <uuid/uuid.h>
+#include "xid.h"
 
 #define PKF_MAGIC                                        0x1983
 #define PKF_VERSION                                      0x0001
@@ -12,6 +12,11 @@
 #define PKF_PROP_DECRYPT_PRIVATE                          0x04
 #define PKF_PROP_SIGN                                     0x08
 #define PKF_PROP_ROOT                                     0x1000      /* 无任何颁发者 */
+
+#define PKF_ONLY                                          0
+#define PKF_PUBLIC                                        1
+#define PKF_PRIVATE                                       2
+#define PKF_PUBLIC_PRIVATE                                3
 
 #define pkf_has_public(p) (p->property & PKF_PROP_PUBLIC != 0)
 #define pkf_has_private(p) (p->property & PKF_PROP_PRIVATE != 0)
@@ -61,8 +66,8 @@ typedef struct _PKF_V1 {
 	
 	/* 与签名运算有关系的数据 */
 	struct {
-		int hash_id;
 		int sign_id;
+		int hash_id;
 		int prng_id;
 	} sign_support;
 
@@ -110,6 +115,7 @@ int pkfMakeKeyPair();
 
 PPKF pkfMake(PPKF pkf, 
 			 int make_key, 
+			 int type,
 			 char* public_key_path, 
 			 char* private_key_path);
 
@@ -127,8 +133,10 @@ int pkfReadPrivateKey(char* opk_file,
 
 int pkfReadPublicKey(char* opk_file, 
 					 char* public_out_file);
-
+ 
 int pkfReadIssuer(char* opk_file, 
 				  PPKF_ISSUER issuer);
+
+#define pkfCheckSize(pkf, pkf_size) !((pkf)->file_size == (pkf_size))
 
 #endif

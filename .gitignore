@@ -1,4 +1,5 @@
 nanan
+xixi
 gitdog
 *.o
 *.a
@@ -8,5 +9,6 @@ gitdog
 *.exe
 *.lib
 *.key
+*.dll
 .emacs.desktop
 

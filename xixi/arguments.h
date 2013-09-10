@@ -1,6 +1,6 @@
 #define DEF_SIGN_ID                0
 #define DEF_CRYPT_ID               6
-#define DEF_HASH_ID                3
+#define DEF_HASH_ID                2
 #define DEF_PRNG_ID                0
 typedef struct _ARGUMENTS {
 	/* [pkf] */
@@ -18,7 +18,7 @@ typedef struct _ARGUMENTS {
 	/* [import data] */
 	int import_parents_pkf;                 /* 用于对PKF进行签名以及验证 */
 	int import_user_pkf;                    /* 用于生成执照 */
-	int import_owner_pkf;                   /* 用于签名以及验证执照 */	
+	int import_owner_pkf;                   /* 用于签名以及验证执照 */
 	int import_private_key_password;
 
 	/* [xfile] */
@@ -45,7 +45,7 @@ typedef struct _ARGUMENTS {
 	union {
 		char pkf_path[128];                          /* 目标PKF的路径 */
 		char target_path[128];
-	}
+	};
 
 	union {
 		char owner_pkf_path[128];                /* owner的pkf路径 */
@@ -78,7 +78,7 @@ static int handle_arguments(int argc, char* argv[]) {
 		encrypt_file,decrypt_file,
 		add_license_to_file,del_license_to_file,
 		set_license_pool,set_target_file,
-		show_version;
+		set_nanan,show_version;
 	const char* short_opts = "1:2:3:4:";
 	struct option long_opts[] = {
 		/*0*/{"make-pkf",1,&make_pkf,0x2013},
@@ -150,7 +150,7 @@ static int handle_arguments(int argc, char* argv[]) {
 				strcpy(g_arguments.owner_pkf_path, optarg);
 			} else if ((longidx == 11) && (import_private_key_password == 0x2002)) {
 				g_arguments.import_private_key_password = 1;
-				strcpy(g_arguments.password, optarg);
+				strcpy(g_arguments.private_key_password, optarg);
 			} else if ((longidx == 12) && (encrypt_file == 0x2001)) {
 				g_arguments.encrypt_file = 1;
 				strcpy(g_arguments.target_path, optarg);
@@ -160,7 +160,7 @@ static int handle_arguments(int argc, char* argv[]) {
 			} else if ((longidx == 14) && (add_license_to_file == 0x1999)) {
 				g_arguments.add_license_to_file = 1;
 				strcpy(g_arguments.license_path, optarg);
-b			} else if ((longidx == 15) && (del_license_to_file == 0x1998)) {
+			} else if ((longidx == 15) && (del_license_to_file == 0x1998)) {
 				g_arguments.del_license_to_file = 1;
 				strcpy(g_arguments.license_path, optarg);
 			} else if ((longidx == 16) && (set_license_pool == 0x1997)) {

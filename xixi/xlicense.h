@@ -1,3 +1,9 @@
+/*
+ * 执照的作用
+ * 1.验证一个文件是否属于这个项目                       用owner的执照验证
+ * 2.用于加密或者解密一个属于这个项目的文件               用不同用户的执照家解密
+ * 3.用于确定这个项目有多少个维护者                     用owner的执照验证
+ */
 #if !defined(__XLICENSE_H__)
 #define __XLICENSE_H__
 
@@ -18,36 +24,11 @@
 #define xlice_check_magic(x) (x->magic == XLICE_MAGIC)
 #define xlice_check_version(x) (x->version == XLICE_VERSION)
 
-typedef struct _XCHANGE_ID {
-	int invalid;
-	XID id;                                       /* XL的ID */
-} XCHANGE_ID;
-
-typedef struct _XCHANGE_LIST {
-	unsigned int xchange_node_count;
-	XCHANGE_ID list[MAX_XCHANGE_NODE];
-	unsigned int xchange_sign_size;               /* xchange的签名大小 */
-	/* 跟随一个签名 */
-} XCHANGE_LIST;
-
-#define xchange_list_size(n) (sizeof(XCHANGE_LIST) + n->xchange_sign_size);
-
-/*
- * XLICENSE用于在一个项目，加解密文件与核实用户身份
- * 执照的生成：
- * 1.用户自己生成一个test.xlice的文件
- * 2.交给项目的owner，owner进行签名，证明其有效性
- * 3.owner将自身与用户设定到xchange链上
- * 4.如果用户想要与其他用户合作，则和其他用户商量好后，一同将自己的xlice
- * 交给项目owner,owner对其进行设定链操作
- * 
- * 加解密操作：
- * 1.使用XL文件进行加密
- */
 typedef struct _XLICENSE {
 	unsigned int magic;
 	unsigned int version;
 	unsigned int file_size;
+	unsigned int sign_size;                       /* owner的签名 */
 	unsigned char checksum[16];
 
 	/* 以下部分是owner进行签名的部分 */
@@ -63,24 +44,16 @@ typedef struct _XLICENSE {
 	XID owner_id;                                 /* owner的license的XID,如果是owner此项全0 */
 	XID id;                                       /* 当前license的ID */
 
-	unsigned int xchange_count;                   /* 有多少个交换链 */
-	unsigned int sign_size;                       /* owner的签名 */
-	int sign_id;
-	int hash_id;                                  /* HASH算法ID */
 	int crypt_id;                                 /* 加密算法ID */
-	int prng_id;                                  /* 随机算法ID */
+	PPKF pkf;                                     /* 临时使用一下 */
 
 	/* 保存了公钥的证书(属主) */
 	/*PKF pfk;*/
 	
 	/* 跟随一个owner的签名 */
-    /* 跟随一组xchange数据(xchange_count个结构) */
 } XLICENSE, *PXLICENSE;
 
-PXLICENSE xliceAlloc(int crypt_id,
-					 int sign_id,
-					 int hash_id,
-					 int prng_id);
+PXLICENSE xliceAlloc(int crypt_id);
 
 int xliceFree(PXLICENSE xlice);
 
@@ -98,15 +71,18 @@ int xliceSetProjectName2(PXLICENSE xlice,
 						 char* user_xlice_file);
 #endif
 
-int xliceSetOwnerID(PXLICENSE xlice,
-					unsigned char* owner_id);
-
 int xliceSignIt0(char* owner_private_key, 
-				 PXLICENSE xlice);
+				 char* user_xlice_file,
+				 PXLICENSE* xlice);
 
-int xliceSignIt(char* owner_private_key,
-				char* user_xlice_file);
+int xliceSignIt(char* owner_pkf_path,
+				char* user_xlice_file,
+				char* password);
 
 void xliceShow(PXLICENSE xlice);
+
+int xliceVerify(char* owner_pkf_path,
+				char* user_xlice_file,
+				int* result);
 
 #endif
